@@ -12,19 +12,16 @@ build:
 requirements:
   build:
     - python
+    - setuptools
     - openmm >=6.3
     - numpy
-    - openmmtools
 
   run:
     - python
     - openmm >=6.3
     - numpy
-    - openmmtools
 
 test:
-  requires:
-    - nose
   imports:
     - alchemy
 

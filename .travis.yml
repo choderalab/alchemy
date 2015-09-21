@@ -17,25 +17,28 @@ install:
   - export PYTHONUNBUFFERED=true
   - export CC=gcc
   - export CXX=g++
-  - export PACKAGENAME="alchemy"
-  - export ORGNAME="omnia"
 
 script:
   - conda config --add channels https://conda.binstar.org/${ORGNAME}
   - conda build devtools/conda-recipe
-  # Install and test (in separate directory)
-  - conda install --yes --quiet --use-local $PACKAGENAME
-  - conda install --yes --quiet nose
-  - cd /home; nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest
+  # Install the package
+  - conda install --yes --quiet --use-local ${PACKAGENAME}-dev
+  # Install packages requred for testing.
+  - conda install --yes --quiet nose nose-timer pymbar openmmtools
+  # Test the package.
+  - mkdir test && cd test && nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer
+
 env:
   matrix:
     - python=2.7  CONDA_PY=27
-    - python=3.3  CONDA_PY=33
-    - python=3.4  CONDA_PY=34
+    #- python=3.3  CONDA_PY=33
+    #- python=3.4  CONDA_PY=34
 
   global:
+    - PACKAGENAME="alchemy"
+    - ORGNAME="omnia"
     # encrypted BINSTAR_TOKEN for push of dev package to binstar
-    secure: "TICJ3PlErCEWyEg8bSARU9s9zN8xY3I8w1oaRvvJLQX5gAdcCyXUoyF38Z5WXqPuo5vmHcmUwg4H++dbLrsQ6FPTiRZk4122epmyewVkML1CJZsEEcXWChSU7UHT5MOrAfjn7ME2SF0lbovGMrMX3zyuYxNww/QtSSmkwuwQxfNUswnugJhePl0ijd2Lun+2LXNoLGNvDK1UyLnyPVNlPmekj3ROqmNi37N+Ozccdg8QPaAgGAamcAJXnwBFcTAUCFayu04WEuB2ngWEqUBhXU5gflFw45OkhUQic9AQgGYwN5oSOoqeGNPyoA8AWrSC3/ZbZpNShLkhhuGJrO1rIa300XHlPVO4yCeypbs0baWQAm6GUx2GLufW6zMFqx4X3bdRu3SvQvvCUgQMmmCmh6FaOkb7o66U6qyxZuiDHake3c6Uv4ZLOn3TO15cO66/0k1HTGBK5Kpk2jNuw6U8uW/fyXZQO0ThRTPjsy+opCyb1kEz746k9/kmOF4RemkC3X1Hg0sDIQqiuobXFnE0PiYfgKpXnUvr2p1eUzyhpLqo44sGVEz33FrUsQhMWjNWBXth6T71vebZRhqGqlLubLHCN5/d1TdU4Gsga2p3nlx10tSNXPEjlIuUfF0CBGLa4tHeqZVvO5XHP04M25V4z/WiZRci0AngCN6F5DaP0Ig="
+    - secure: "TICJ3PlErCEWyEg8bSARU9s9zN8xY3I8w1oaRvvJLQX5gAdcCyXUoyF38Z5WXqPuo5vmHcmUwg4H++dbLrsQ6FPTiRZk4122epmyewVkML1CJZsEEcXWChSU7UHT5MOrAfjn7ME2SF0lbovGMrMX3zyuYxNww/QtSSmkwuwQxfNUswnugJhePl0ijd2Lun+2LXNoLGNvDK1UyLnyPVNlPmekj3ROqmNi37N+Ozccdg8QPaAgGAamcAJXnwBFcTAUCFayu04WEuB2ngWEqUBhXU5gflFw45OkhUQic9AQgGYwN5oSOoqeGNPyoA8AWrSC3/ZbZpNShLkhhuGJrO1rIa300XHlPVO4yCeypbs0baWQAm6GUx2GLufW6zMFqx4X3bdRu3SvQvvCUgQMmmCmh6FaOkb7o66U6qyxZuiDHake3c6Uv4ZLOn3TO15cO66/0k1HTGBK5Kpk2jNuw6U8uW/fyXZQO0ThRTPjsy+opCyb1kEz746k9/kmOF4RemkC3X1Hg0sDIQqiuobXFnE0PiYfgKpXnUvr2p1eUzyhpLqo44sGVEz33FrUsQhMWjNWBXth6T71vebZRhqGqlLubLHCN5/d1TdU4Gsga2p3nlx10tSNXPEjlIuUfF0CBGLa4tHeqZVvO5XHP04M25V4z/WiZRci0AngCN6F5DaP0Ig="
 
 after_success:
   - echo "after_success"

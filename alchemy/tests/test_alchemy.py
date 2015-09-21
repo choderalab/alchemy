@@ -18,8 +18,7 @@ import numpy as np
 import time
 from functools import partial
 
-import simtk.openmm as openmm
-import simtk.unit as units
+from simtk import unit, openmm
 from simtk.openmm import app
 
 from nose.plugins.attrib import attr
@@ -30,9 +29,7 @@ logger = logging.getLogger(__name__)
 
 from openmmtools import testsystems
 
-from yank import alchemy
-import yank.alchemy
-from yank.alchemy import AlchemicalState, AbsoluteAlchemicalFactory
+from alchemy import AlchemicalState, AbsoluteAlchemicalFactory
 
 from nose.plugins.skip import Skip, SkipTest
 
@@ -40,8 +37,8 @@ from nose.plugins.skip import Skip, SkipTest
 # CONSTANTS
 #=============================================================================================
 
-kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann constant
-temperature = 300.0 * units.kelvin # reference temperature
+kB = unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA # Boltzmann constant
+temperature = 300.0 * unit.kelvin # reference temperature
 MAX_DELTA = 0.01 * kB * temperature # maximum allowable deviation
 
 #=============================================================================================
@@ -50,7 +47,7 @@ MAX_DELTA = 0.01 * kB * temperature # maximum allowable deviation
 
 def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
     # Compare energies.
-    timestep = 1.0 * units.femtosecond
+    timestep = 1.0 * unit.femtosecond
 
     if platform:
         platform_name = platform.getName()
@@ -77,12 +74,12 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
 
     logger.info("========")
     for i in range(len(systems)):
-        logger.info("%32s : %24.8f kcal/mol" % (descriptions[i], potentials[i] / units.kilocalories_per_mole))
+        logger.info("%32s : %24.8f kcal/mol" % (descriptions[i], potentials[i] / unit.kilocalories_per_mole))
         if (i > 0):
             delta = potentials[i] - potentials[0]
-            logger.info("%32s : %24.8f kcal/mol" % ('ERROR', delta / units.kilocalories_per_mole))
+            logger.info("%32s : %24.8f kcal/mol" % ('ERROR', delta / unit.kilocalories_per_mole))
             if (abs(delta) > MAX_DELTA):
-                raise Exception("Maximum allowable deviation (%24.8f kcal/mol) exceeded; test failed." % (MAX_DELTA / units.kilocalories_per_mole))
+                raise Exception("Maximum allowable deviation (%24.8f kcal/mol) exceeded; test failed." % (MAX_DELTA / unit.kilocalories_per_mole))
 
     return potentials
 
@@ -123,7 +120,7 @@ def alchemical_factory_check(reference_system, positions, receptor_atoms, ligand
 
     return
 
-def benchmark(reference_system, positions, receptor_atoms, ligand_atoms, platform_name=None, annihilate_electrostatics=True, annihilate_sterics=False, nsteps=500, timestep=1.0*units.femtoseconds):
+def benchmark(reference_system, positions, receptor_atoms, ligand_atoms, platform_name=None, annihilate_electrostatics=True, annihilate_sterics=False, nsteps=500, timestep=1.0*unit.femtoseconds):
     """
     Benchmark performance of alchemically modified system relative to original system.
 
@@ -253,9 +250,9 @@ def overlap_check(reference_system, positions, receptor_atoms, ligand_atoms, pla
     alchemical_state = AlchemicalState()
     alchemical_system = factory.createPerturbedSystem(alchemical_state)
 
-    temperature = 300.0 * units.kelvin
-    collision_rate = 5.0 / units.picoseconds
-    timestep = 2.0 * units.femtoseconds
+    temperature = 300.0 * unit.kelvin
+    collision_rate = 5.0 / unit.picoseconds
+    timestep = 2.0 * unit.femtoseconds
     kT = (kB * temperature)
 
     # Select platform.
@@ -383,7 +380,7 @@ def lambda_trace(reference_system, positions, receptor_atoms, ligand_atoms, plat
     delta = 1.0 / nsteps
 
     def compute_potential(system, positions, platform=None):
-        timestep = 1.0 * units.femtoseconds
+        timestep = 1.0 * unit.femtoseconds
         integrator = openmm.VerletIntegrator(timestep)
         if platform:
             context = openmm.Context(system, integrator, platform)
@@ -400,13 +397,13 @@ def lambda_trace(reference_system, positions, receptor_atoms, ligand_atoms, plat
 
     # Scan through lambda values.
     lambda_i = np.zeros([nsteps+1], np.float64) # lambda values for u_i
-    u_i = units.Quantity(np.zeros([nsteps+1], np.float64), units.kilocalories_per_mole) # u_i[i] is the potential energy for lambda_i[i]
+    u_i = unit.Quantity(np.zeros([nsteps+1], np.float64), unit.kilocalories_per_mole) # u_i[i] is the potential energy for lambda_i[i]
     for i in range(nsteps+1):
         lambda_value = 1.0-i*delta # compute lambda value for this step
         alchemical_system = factory.createPerturbedSystem(AlchemicalState(lambda_coulomb=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value))
         lambda_i[i] = lambda_value
         u_i[i] = compute_potential(alchemical_system, positions, platform)
-        logger.info("%12.9f %24.8f kcal/mol" % (lambda_i[i], u_i[i] / units.kilocalories_per_mole))
+        logger.info("%12.9f %24.8f kcal/mol" % (lambda_i[i], u_i[i] / unit.kilocalories_per_mole))
 
     # Write figure as PDF.
     import pylab
@@ -415,8 +412,8 @@ def lambda_trace(reference_system, positions, receptor_atoms, ligand_atoms, plat
     with PdfPages('lambda-trace.pdf') as pdf:
         fig = plt.figure(figsize=(10, 5))
         ax = fig.add_subplot(111)
-        plt.plot(1, u_original / units.kilocalories_per_mole, 'ro', label='unmodified')
-        plt.plot(lambda_i, u_i / units.kilocalories_per_mole, 'k.', label='alchemical')
+        plt.plot(1, u_original / unit.kilocalories_per_mole, 'ro', label='unmodified')
+        plt.plot(lambda_i, u_i / unit.kilocalories_per_mole, 'k.', label='alchemical')
         plt.title('T4 lysozyme L99A + p-xylene : AMBER96 + OBC GBSA')
         plt.ylabel('potential (kcal/mol)')
         plt.xlabel('lambda')
