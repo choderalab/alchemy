@@ -25,7 +25,6 @@ requirements:
 test:
   imports:
     - alchemy
-    - alchemy.AbsoluteAlchemicalFactory
 
 about:
   home: https://github.com/choderalab/alchemy
