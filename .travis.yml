@@ -23,10 +23,10 @@ install:
 script:
   - conda config --add channels https://conda.binstar.org/${ORGNAME}
   - conda build devtools/conda-recipe
-  # Install and test (in separate directory)
+  # Install the package
   - conda install --yes --quiet --use-local $PACKAGENAME
-  - conda install --yes --quiet nose
-  - pip install nose-timer
+  # Test the package
+  - conda install --yes --quiet nose nose-timer
   - cd /home; nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer
 
 env:

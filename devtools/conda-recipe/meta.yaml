@@ -23,10 +23,9 @@ requirements:
     - openmmtools
 
 test:
-  requires:
-    - nose
   imports:
     - alchemy
+    - alchemy.AbsoluteAlchemicalFactory
 
 about:
   home: https://github.com/choderalab/alchemy
