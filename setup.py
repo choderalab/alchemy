@@ -81,7 +81,6 @@ setup(name='alchemy',
       install_requires=[
         'openmm >=6.3',
         'numpy',
-        'scipy',
         'openmmtools',
         ],
       )
