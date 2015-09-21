@@ -14,13 +14,11 @@ requirements:
     - python
     - openmm >=6.3
     - numpy
-    - openmmtools
 
   run:
     - python
     - openmm >=6.3
     - numpy
-    - openmmtools
 
 test:
   imports:

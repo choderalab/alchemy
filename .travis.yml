@@ -23,8 +23,9 @@ script:
   - conda build devtools/conda-recipe
   # Install the package
   - conda install --yes --quiet --use-local ${PACKAGENAME}-dev
-  # Test the package
-  - conda install --yes --quiet nose nose-timer
+  # Install packages requred for testing.
+  - conda install --yes --quiet nose nose-timer pymbar openmmtools
+  # Test the package.
   - cd /home; nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer
 
 env:
