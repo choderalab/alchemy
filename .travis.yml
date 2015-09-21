@@ -26,7 +26,9 @@ script:
   # Install and test (in separate directory)
   - conda install --yes --quiet --use-local $PACKAGENAME
   - conda install --yes --quiet nose
-  - cd /home; nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest
+  - pip install nose-timer
+  - cd /home; nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer
+
 env:
   matrix:
     - python=2.7  CONDA_PY=27
