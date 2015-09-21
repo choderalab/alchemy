@@ -26,7 +26,7 @@ script:
   # Install packages requred for testing.
   - conda install --yes --quiet nose nose-timer pymbar openmmtools
   # Test the package.
-  - cd /home; nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer
+  - mkdir test && cd test && nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer
 
 env:
   matrix:
