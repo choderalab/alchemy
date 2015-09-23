@@ -22,6 +22,12 @@ requirements:
     - numpy
 
 test:
+  requires:
+    - nose
+    - nose-timer
+    - pymbar
+    - openmmtools
+
   imports:
     - alchemy
 

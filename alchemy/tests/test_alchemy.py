@@ -457,6 +457,10 @@ test_systems['TIP3P with reaction field, switch, dispersion correction'] = {
 test_systems['alanine dipeptide in vacuum'] = {
     'test' : testsystems.AlanineDipeptideVacuum(),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
+test_systems['alanine dipeptide in vacuum with annihilated sterics'] = {
+    'test' : testsystems.AlanineDipeptideVacuum(),
+    'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
+    'annihilate_sterics' : True }
 test_systems['alanine dipeptide in OBC GBSA'] = {
     'test' : testsystems.AlanineDipeptideImplicit(),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
@@ -466,6 +470,10 @@ test_systems['alanine dipeptide in TIP3P with reaction field'] = {
 test_systems['T4 lysozyme L99A with p-xylene in OBC GBSA'] = {
     'test' : testsystems.LysozymeImplicit(),
     'ligand_atoms' : range(2603,2621), 'receptor_atoms' : range(0,2603) }
+test_systems['Src in TIP3P with reaction field, with Src sterics annihilated'] = {
+    'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
+    'ligand_atoms' : range(0,4091), 'receptor_atoms' : [],
+    'annihilate_sterics' : True }
 
 # Problematic tests: PME is not fully implemented yet
 #test_systems['TIP3P with PME, no switch, no dispersion correction'] = {
@@ -487,6 +495,7 @@ fast_testsystem_names = [
     'TIP3P with reaction field, no charges, no switch, no dispersion correction',
     'TIP3P with reaction field, switch, no dispersion correction',
     'TIP3P with reaction field, switch, dispersion correction',
+    'alanine dipeptide in vacuum with annihilated sterics',
 #    'TIP3P with PME, no switch, no dispersion correction' # PME still problematic
     ]
 
@@ -506,7 +515,8 @@ def test_overlap():
         positions = test_system['test'].positions
         ligand_atoms = test_system['ligand_atoms']
         receptor_atoms = test_system['receptor_atoms']
-        f = partial(overlap_check, reference_system, positions, receptor_atoms, ligand_atoms)
+        annihilate_sterics = False if 'annihilate_sterics' not in test_system else test_system['annihilate_sterics']
+        f = partial(overlap_check, reference_system, positions, receptor_atoms, ligand_atoms, annihilate_sterics=annihilate_sterics)
         f.description = "Testing reference/alchemical overlap for %s..." % name
         yield f
 
@@ -522,7 +532,8 @@ def test_alchemical_accuracy():
         positions = test_system['test'].positions
         ligand_atoms = test_system['ligand_atoms']
         receptor_atoms = test_system['receptor_atoms']
-        f = partial(alchemical_factory_check, reference_system, positions, receptor_atoms, ligand_atoms)
+        annihilate_sterics = False if 'annihilate_sterics' not in test_system else test_system['annihilate_sterics']
+        f = partial(alchemical_factory_check, reference_system, positions, receptor_atoms, ligand_atoms, annihilate_sterics=annihilate_sterics)
         f.description = "Testing alchemical fidelity of %s..." % name
         yield f
 
