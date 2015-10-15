@@ -442,19 +442,19 @@ test_systems['Lennard-Jones fluid without dispersion correction'] = {
 test_systems['Lennard-Jones fluid with dispersion correction'] = {
     'test' : testsystems.LennardJonesFluid(dispersion_correction=True),
     'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }
-# This test segfaults
+# These commented-out systems segfault on travis
 #test_systems['TIP3P with reaction field, no charges, no switch, no dispersion correction'] = {
 #    'test' : testsystems.DischargedWaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.CutoffPeriodic),
 #    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
-test_systems['TIP3P with reaction field, switch, no dispersion correction'] = {
-    'test' : testsystems.WaterBox(dispersion_correction=False, switch=True, nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
-test_systems['TIP3P with reaction field, no switch, dispersion correction'] = {
-    'test' : testsystems.WaterBox(dispersion_correction=True, switch=False, nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
-test_systems['TIP3P with reaction field, switch, dispersion correction'] = {
-    'test' : testsystems.WaterBox(dispersion_correction=True, switch=True, nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
+#test_systems['TIP3P with reaction field, switch, no dispersion correction'] = {
+#    'test' : testsystems.WaterBox(dispersion_correction=False, switch=True, nonbondedMethod=app.CutoffPeriodic),
+#    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
+#test_systems['TIP3P with reaction field, no switch, dispersion correction'] = {
+#    'test' : testsystems.WaterBox(dispersion_correction=True, switch=False, nonbondedMethod=app.CutoffPeriodic),
+#    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
+#test_systems['TIP3P with reaction field, switch, dispersion correction'] = {
+#    'test' : testsystems.WaterBox(dispersion_correction=True, switch=True, nonbondedMethod=app.CutoffPeriodic),
+#    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
 test_systems['alanine dipeptide in vacuum'] = {
     'test' : testsystems.AlanineDipeptideVacuum(),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
