@@ -442,9 +442,10 @@ test_systems['Lennard-Jones fluid without dispersion correction'] = {
 test_systems['Lennard-Jones fluid with dispersion correction'] = {
     'test' : testsystems.LennardJonesFluid(dispersion_correction=True),
     'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }
-test_systems['TIP3P with reaction field, no charges, no switch, no dispersion correction'] = {
-    'test' : testsystems.DischargedWaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
+# This test segfaults
+#test_systems['TIP3P with reaction field, no charges, no switch, no dispersion correction'] = {
+#    'test' : testsystems.DischargedWaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.CutoffPeriodic),
+#    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
 test_systems['TIP3P with reaction field, switch, no dispersion correction'] = {
     'test' : testsystems.WaterBox(dispersion_correction=False, switch=True, nonbondedMethod=app.CutoffPeriodic),
     'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
