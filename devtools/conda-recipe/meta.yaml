@@ -13,12 +13,12 @@ requirements:
   build:
     - python
     - setuptools
-    - openmm >=6.3
+    - openmm-dev
     - numpy
 
   run:
     - python
-    - openmm >=6.3
+    - openmm-dev
     - numpy
 
 test:

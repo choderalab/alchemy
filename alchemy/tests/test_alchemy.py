@@ -470,9 +470,17 @@ test_systems['alanine dipeptide in TIP3P with reaction field'] = {
 test_systems['T4 lysozyme L99A with p-xylene in OBC GBSA'] = {
     'test' : testsystems.LysozymeImplicit(),
     'ligand_atoms' : range(2603,2621), 'receptor_atoms' : range(0,2603) }
+test_systems['DHFR in explicit solvent with reaction field, annihilated'] = {
+    'test' : testsystems.DHFRExplicit(nonbondedMethod=app.CutoffPeriodic),
+    'ligand_atoms' : range(0,2849), 'receptor_atoms' : [],
+    'annihilate_sterics' : True }
 test_systems['Src in TIP3P with reaction field, with Src sterics annihilated'] = {
     'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,4091), 'receptor_atoms' : [],
+    'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
+    'annihilate_sterics' : True }
+test_systems['Src in GBSA, with Src sterics annihilated'] = {
+    'test' : testsystems.SrcImplicit(),
+    'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
     'annihilate_sterics' : True }
 
 # Problematic tests: PME is not fully implemented yet
@@ -483,7 +491,7 @@ test_systems['Src in TIP3P with reaction field, with Src sterics annihilated'] =
 # Slow tests
 #test_systems['Src in OBC GBSA'] = {
 #    'test' : testsystems.SrcImplicit(),
-#    'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,4091) }
+#    'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,7208) }
 #test_systems['Src in TIP3P with reaction field'] = {
 #    'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
 #    'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,4091) }
