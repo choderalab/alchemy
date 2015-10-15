@@ -501,9 +501,10 @@ fast_testsystem_names = [
     'Lennard-Jones cluster',
     'Lennard-Jones fluid without dispersion correction',
     'Lennard-Jones fluid with dispersion correction',
-    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
-    'TIP3P with reaction field, switch, no dispersion correction',
-    'TIP3P with reaction field, switch, dispersion correction',
+# These cause segfaults on travis
+#    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
+#    'TIP3P with reaction field, switch, no dispersion correction',
+#    'TIP3P with reaction field, switch, dispersion correction',
     'alanine dipeptide in vacuum with annihilated sterics',
 #    'TIP3P with PME, no switch, no dispersion correction' # PME still problematic
     ]
