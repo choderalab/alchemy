@@ -518,7 +518,6 @@ def test_overlap():
     """
     Generate nose tests for overlap for all alchemical test systems.
     """
-    platform_name = 'Reference'
     for name in fast_testsystem_names:
         test_system = test_systems[name]
         reference_system = test_system['test'].system
@@ -526,7 +525,7 @@ def test_overlap():
         ligand_atoms = test_system['ligand_atoms']
         receptor_atoms = test_system['receptor_atoms']
         annihilate_sterics = False if 'annihilate_sterics' not in test_system else test_system['annihilate_sterics']
-        f = partial(overlap_check, reference_system, positions, receptor_atoms, ligand_atoms, annihilate_sterics=annihilate_sterics, platform_name=platform_name)
+        f = partial(overlap_check, reference_system, positions, receptor_atoms, ligand_atoms, annihilate_sterics=annihilate_sterics)
         f.description = "Testing reference/alchemical overlap for %s..." % name
         yield f
 
@@ -536,7 +535,6 @@ def test_alchemical_accuracy():
     """
     Generate nose tests for overlap for all alchemical test systems.
     """
-    platform_name = 'Reference'
     for name in test_systems.keys():
         test_system = test_systems[name]
         reference_system = test_system['test'].system
@@ -544,7 +542,7 @@ def test_alchemical_accuracy():
         ligand_atoms = test_system['ligand_atoms']
         receptor_atoms = test_system['receptor_atoms']
         annihilate_sterics = False if 'annihilate_sterics' not in test_system else test_system['annihilate_sterics']
-        f = partial(alchemical_factory_check, reference_system, positions, receptor_atoms, ligand_atoms, annihilate_sterics=annihilate_sterics, platform_name=platform_name)
+        f = partial(alchemical_factory_check, reference_system, positions, receptor_atoms, ligand_atoms, annihilate_sterics=annihilate_sterics)
         f.description = "Testing alchemical fidelity of %s..." % name
         yield f
 
