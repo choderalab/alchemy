@@ -517,7 +517,7 @@ def test_overlap():
     """
     Generate nose tests for overlap for all alchemical test systems.
     """
-    platform_name = 'Reference'
+    platform_name = 'CPU'
     for name in fast_testsystem_names:
         test_system = test_systems[name]
         reference_system = test_system['test'].system
@@ -535,7 +535,7 @@ def test_alchemical_accuracy():
     """
     Generate nose tests for overlap for all alchemical test systems.
     """
-    platform_name = 'Reference'
+    platform_name = 'CPU'
     for name in test_systems.keys():
         test_system = test_systems[name]
         reference_system = test_system['test'].system
