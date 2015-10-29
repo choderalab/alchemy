@@ -46,6 +46,105 @@ MAX_DELTA = 1.0 * kB * temperature # maximum allowable deviation
 # SUBROUTINES FOR TESTING
 #=============================================================================================
 
+def config_root_logger(verbose, log_file_path=None, mpicomm=None):
+    """Setup the the root logger's configuration.
+     The log messages are printed in the terminal and saved in the file specified
+     by log_file_path (if not None) and printed. Note that logging use sys.stdout
+     to print logging.INFO messages, and stderr for the others. The root logger's
+     configuration is inherited by the loggers created by logging.getLogger(name).
+     Different formats are used to display messages on the terminal and on the log
+     file. For example, in the log file every entry has a timestamp which does not
+     appear in the terminal. Moreover, the log file always shows the module that
+     generate the message, while in the terminal this happens only for messages
+     of level WARNING and higher.
+    Parameters
+    ----------
+    verbose : bool
+        Control the verbosity of the messages printed in the terminal. The logger
+        displays messages of level logging.INFO and higher when verbose=False.
+        Otherwise those of level logging.DEBUG and higher are printed.
+    log_file_path : str, optional, default = None
+        If not None, this is the path where all the logger's messages of level
+        logging.DEBUG or higher are saved.
+    mpicomm : mpi4py.MPI.COMM communicator, optional, default=None
+        If specified, this communicator will be used to determine node rank.
+    """
+
+    class TerminalFormatter(logging.Formatter):
+        """
+        Simplified format for INFO and DEBUG level log messages.
+        This allows to keep the logging.info() and debug() format separated from
+        the other levels where more information may be needed. For example, for
+        warning and error messages it is convenient to know also the module that
+        generates them.
+        """
+
+        # This is the cleanest way I found to make the code compatible with both
+        # Python 2 and Python 3
+        simple_fmt = logging.Formatter('%(asctime)-15s: %(message)s')
+        default_fmt = logging.Formatter('%(asctime)-15s: %(levelname)s - %(name)s - %(message)s')
+
+        def format(self, record):
+            if record.levelno <= logging.INFO:
+                return self.simple_fmt.format(record)
+            else:
+                return self.default_fmt.format(record)
+
+    # Check if root logger is already configured
+    n_handlers = len(logging.root.handlers)
+    if n_handlers > 0:
+        root_logger = logging.root
+        for i in xrange(n_handlers):
+            root_logger.removeHandler(root_logger.handlers[0])
+
+    # If this is a worker node, don't save any log file
+    if mpicomm:
+        rank = mpicomm.rank
+    else:
+        rank = 0
+
+    if rank != 0:
+        log_file_path = None
+
+    # Add handler for stdout and stderr messages
+    terminal_handler = logging.StreamHandler()
+    terminal_handler.setFormatter(TerminalFormatter())
+    if rank != 0:
+        terminal_handler.setLevel(logging.WARNING)
+    elif verbose:
+        terminal_handler.setLevel(logging.DEBUG)
+    else:
+        terminal_handler.setLevel(logging.INFO)
+    logging.root.addHandler(terminal_handler)
+
+    # Add file handler to root logger
+    if log_file_path is not None:
+        file_format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+        file_handler = logging.FileHandler(log_file_path)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(file_format))
+        logging.root.addHandler(file_handler)
+
+    # Do not handle logging.DEBUG at all if unnecessary
+    if log_file_path is not None:
+        logging.root.setLevel(logging.DEBUG)
+    else:
+        logging.root.setLevel(terminal_handler.level)
+
+def dump_xml(system=None, integrator=None, state=None):
+    """
+    Dump system, integrator, and state to XML for debugging.
+    """
+    from simtk.openmm import XmlSerializer
+    def write_file(filename, contents):
+        outfile = open(filename, 'w')
+        outfile.write(contents)
+        outfile.close()
+    if system: write_file('system.xml', XmlSerializer.serialize(system))
+    if integrator: write_file('integrator.xml', XmlSerializer.serialize(integrator))
+    if state: write_file('state.xml', XmlSerializer.serialize(state))
+    return
+
 def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
     # Compare energies.
     timestep = 1.0 * unit.femtosecond
@@ -58,20 +157,37 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
             elif platform_name == 'OpenCL':
                 platform.setDefaultPropertyValue('OpenCLPrecision', precision)
 
+    # DEBUG
+    platform = openmm.Platform.getPlatformByName('Reference')
+
     potentials = list()
     states = list()
     for system in systems:
+        dump_xml(system=system)
+        print('Creating integrator...')
         integrator = openmm.VerletIntegrator(timestep)
+        print('Creating context...')
+        dump_xml(integrator=integrator)
         if platform:
             context = openmm.Context(system, integrator, platform)
         else:
             context = openmm.Context(system, integrator)
+
+        # Report which platform is in use.
+        print("context platform: %s" % context.getPlatform().getName())
+
+        print('Setting positions...')
         context.setPositions(positions)
+        print('Getting energy and positions...')
         state = context.getState(getEnergy=True, getPositions=True)
+        print('dumping XML...')
+        dump_xml(system=system, integrator=integrator, state=state)
+        print('Getting potential...')
         potential = state.getPotentialEnergy()
         potentials.append(potential)
         states.append(state)
-        del context, integrator
+        print('Cleaning up..')
+        del context, integrator, state
 
     logger.info("========")
     for i in range(len(systems)):
@@ -100,23 +216,24 @@ def alchemical_factory_check(reference_system, positions, receptor_atoms, ligand
     """
 
     # Create a factory to produce alchemical intermediates.
+    print('Creating AbsoluteAlchemicalFactory...')
     logger.info("Creating alchemical factory...")
     initial_time = time.time()
+    print('Creating AbsoluteAlchemicalFactory...')
     factory = AbsoluteAlchemicalFactory(reference_system, ligand_atoms=ligand_atoms, annihilate_electrostatics=annihilate_electrostatics, annihilate_sterics=annihilate_sterics)
     final_time = time.time()
     elapsed_time = final_time - initial_time
     logger.info("AbsoluteAlchemicalFactory initialization took %.3f s" % elapsed_time)
 
+    print('Selecting platform')
     platform = None
     if platform_name:
         platform = openmm.Platform.getPlatformByName(platform_name)
 
-    alchemical_system = factory.createPerturbedSystem(AlchemicalState())
+    print('Creating perturbed system...')
+    alchemical_system = factory.createPerturbedSystem()
 
-    # Serialize for debugging.
-    with open('system.xml', 'w') as outfile:
-        outfile.write(alchemical_system.__getstate__())
-
+    print('Comparing energies...')
     compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
 
     return
@@ -272,6 +389,10 @@ def overlap_check(reference_system, positions, receptor_atoms, ligand_atoms, pla
     else:
         reference_context = openmm.Context(reference_system, reference_integrator)
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator)
+
+    # Report which platform is in use.
+    print("reference_context platform: %s" % reference_context.getPlatform().getName())
+    print("alchemical_context platform: %s" % alchemical_context.getPlatform().getName())
 
     # Collect simulation data.
     reference_context.setPositions(positions)
@@ -465,6 +586,10 @@ test_systems['alanine dipeptide in vacuum with annihilated sterics'] = {
 test_systems['alanine dipeptide in OBC GBSA'] = {
     'test' : testsystems.AlanineDipeptideImplicit(),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
+test_systems['alanine dipeptide in OBC GBSA, with sterics annihilated'] = {
+    'test' : testsystems.AlanineDipeptideImplicit(),
+    'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
+    'annihilate_sterics' : True }
 test_systems['alanine dipeptide in TIP3P with reaction field'] = {
     'test' : testsystems.AlanineDipeptideExplicit(nonbondedMethod=app.CutoffPeriodic),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
@@ -479,6 +604,10 @@ test_systems['Src in TIP3P with reaction field, with Src sterics annihilated'] =
     'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
     'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
     'annihilate_sterics' : True }
+test_systems['Src in GBSA'] = {
+    'test' : testsystems.SrcImplicit(),
+    'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
+    'annihilate_sterics' : False }
 test_systems['Src in GBSA, with Src sterics annihilated'] = {
     'test' : testsystems.SrcImplicit(),
     'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
@@ -554,12 +683,13 @@ def test_alchemical_accuracy():
 
 if __name__ == "__main__":
     #generate_trace(test_systems['TIP3P with reaction field, switch, dispersion correction'])
+    config_root_logger(True)
 
-    test_systems = dict()
-    test_systems['Src in TIP3P with reaction field'] = {
-        'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
-        'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,4091) }
-    name = 'Src in TIP3P with reaction field'
+    #name = 'Lennard-Jones fluid with dispersion correction'
+    name = 'Src in GBSA, with Src sterics annihilated'
+    name = 'Src in GBSA'
+    #name = 'alanine dipeptide in OBC GBSA, with sterics annihilated'
+    #name = 'alanine dipeptide in OBC GBSA'
     test_system = test_systems[name]
     reference_system = test_system['test'].system
     positions = test_system['test'].positions
