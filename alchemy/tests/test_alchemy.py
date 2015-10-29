@@ -606,11 +606,11 @@ test_systems['Src in TIP3P with reaction field, with Src sterics annihilated'] =
     'annihilate_sterics' : True }
 test_systems['Src in GBSA'] = {
     'test' : testsystems.SrcImplicit(),
-    'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
+    'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
     'annihilate_sterics' : False }
 test_systems['Src in GBSA, with Src sterics annihilated'] = {
     'test' : testsystems.SrcImplicit(),
-    'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
+    'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
     'annihilate_sterics' : True }
 
 # Problematic tests: PME is not fully implemented yet
