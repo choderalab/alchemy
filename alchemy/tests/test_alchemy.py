@@ -157,9 +157,6 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
             elif platform_name == 'OpenCL':
                 platform.setDefaultPropertyValue('OpenCLPrecision', precision)
 
-    # DEBUG
-    platform = openmm.Platform.getPlatformByName('Reference')
-
     potentials = list()
     states = list()
     for system in systems:
