@@ -579,14 +579,14 @@ test_systems['alanine dipeptide in vacuum'] = {
 test_systems['alanine dipeptide in vacuum with annihilated sterics'] = {
     'test' : testsystems.AlanineDipeptideVacuum(),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
-    'annihilate_sterics' : True }
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
 test_systems['alanine dipeptide in OBC GBSA'] = {
     'test' : testsystems.AlanineDipeptideImplicit(),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
 test_systems['alanine dipeptide in OBC GBSA, with sterics annihilated'] = {
     'test' : testsystems.AlanineDipeptideImplicit(),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
-    'annihilate_sterics' : True }
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
 test_systems['alanine dipeptide in TIP3P with reaction field'] = {
     'test' : testsystems.AlanineDipeptideExplicit(nonbondedMethod=app.CutoffPeriodic),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
@@ -596,19 +596,19 @@ test_systems['T4 lysozyme L99A with p-xylene in OBC GBSA'] = {
 test_systems['DHFR in explicit solvent with reaction field, annihilated'] = {
     'test' : testsystems.DHFRExplicit(nonbondedMethod=app.CutoffPeriodic),
     'ligand_atoms' : range(0,2849), 'receptor_atoms' : [],
-    'annihilate_sterics' : True }
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
 test_systems['Src in TIP3P with reaction field, with Src sterics annihilated'] = {
     'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
     'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
-    'annihilate_sterics' : True }
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
 test_systems['Src in GBSA'] = {
     'test' : testsystems.SrcImplicit(),
     'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
-    'annihilate_sterics' : False }
+    'annihilate_sterics' : False, 'annihilate_electrostatics' : False }
 test_systems['Src in GBSA, with Src sterics annihilated'] = {
     'test' : testsystems.SrcImplicit(),
     'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
-    'annihilate_sterics' : True }
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
 
 # Problematic tests: PME is not fully implemented yet
 test_systems['TIP3P with PME, no switch, no dispersion correction'] = {
@@ -683,7 +683,7 @@ if __name__ == "__main__":
     config_root_logger(True)
 
     #name = 'Lennard-Jones fluid with dispersion correction'
-    name = 'Src in GBSA, with Src sterics annihilated'
+    #name = 'Src in GBSA, with Src sterics annihilated'
     name = 'Src in GBSA'
     #name = 'alanine dipeptide in OBC GBSA, with sterics annihilated'
     #name = 'alanine dipeptide in OBC GBSA'
