@@ -388,8 +388,8 @@ def overlap_check(reference_system, positions, receptor_atoms, ligand_atoms, pla
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator)
 
     # Report which platform is in use.
-    print("reference_context platform: %s" % reference_context.getPlatform().getName())
-    print("alchemical_context platform: %s" % alchemical_context.getPlatform().getName())
+    #print("reference_context platform: %s" % reference_context.getPlatform().getName())
+    #print("alchemical_context platform: %s" % alchemical_context.getPlatform().getName())
 
     # Collect simulation data.
     reference_context.setPositions(positions)
