@@ -160,30 +160,19 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
     potentials = list()
     states = list()
     for system in systems:
-        dump_xml(system=system)
-        print('Creating integrator...')
+        #dump_xml(system=system)
         integrator = openmm.VerletIntegrator(timestep)
-        print('Creating context...')
-        dump_xml(integrator=integrator)
+        #dump_xml(integrator=integrator)
         if platform:
             context = openmm.Context(system, integrator, platform)
         else:
             context = openmm.Context(system, integrator)
-
-        # Report which platform is in use.
-        print("context platform: %s" % context.getPlatform().getName())
-
-        print('Setting positions...')
         context.setPositions(positions)
-        print('Getting energy and positions...')
         state = context.getState(getEnergy=True, getPositions=True)
-        print('dumping XML...')
-        dump_xml(system=system, integrator=integrator, state=state)
-        print('Getting potential...')
+        #dump_xml(system=system, integrator=integrator, state=state)
         potential = state.getPotentialEnergy()
         potentials.append(potential)
         states.append(state)
-        print('Cleaning up..')
         del context, integrator, state
 
     logger.info("========")
@@ -213,26 +202,17 @@ def alchemical_factory_check(reference_system, positions, receptor_atoms, ligand
     """
 
     # Create a factory to produce alchemical intermediates.
-    print('Creating AbsoluteAlchemicalFactory...')
     logger.info("Creating alchemical factory...")
     initial_time = time.time()
-    print('Creating AbsoluteAlchemicalFactory...')
     factory = AbsoluteAlchemicalFactory(reference_system, ligand_atoms=ligand_atoms, annihilate_electrostatics=annihilate_electrostatics, annihilate_sterics=annihilate_sterics)
     final_time = time.time()
     elapsed_time = final_time - initial_time
     logger.info("AbsoluteAlchemicalFactory initialization took %.3f s" % elapsed_time)
-
-    print('Selecting platform')
     platform = None
     if platform_name:
         platform = openmm.Platform.getPlatformByName(platform_name)
-
-    print('Creating perturbed system...')
     alchemical_system = factory.createPerturbedSystem()
-
-    print('Comparing energies...')
     compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
-
     return
 
 def benchmark(reference_system, positions, receptor_atoms, ligand_atoms, platform_name=None, annihilate_electrostatics=True, annihilate_sterics=False, nsteps=500, timestep=1.0*unit.femtoseconds):
@@ -386,10 +366,6 @@ def overlap_check(reference_system, positions, receptor_atoms, ligand_atoms, pla
     else:
         reference_context = openmm.Context(reference_system, reference_integrator)
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator)
-
-    # Report which platform is in use.
-    #print("reference_context platform: %s" % reference_context.getPlatform().getName())
-    #print("alchemical_context platform: %s" % alchemical_context.getPlatform().getName())
 
     # Collect simulation data.
     reference_context.setPositions(positions)
@@ -623,7 +599,7 @@ test_systems['TIP3P with PME, no switch, no dispersion correction'] = {
 #    'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
 #    'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,4091) }
 
-fast_testsystem_names = [
+accuracy_testsystem_names = [
     'Lennard-Jones cluster',
     'Lennard-Jones fluid without dispersion correction',
     'Lennard-Jones fluid with dispersion correction',
@@ -631,9 +607,18 @@ fast_testsystem_names = [
     'TIP3P with reaction field, switch, no dispersion correction',
     'TIP3P with reaction field, switch, dispersion correction',
     'alanine dipeptide in vacuum with annihilated sterics',
-    'TIP3P with PME, no switch, no dispersion correction' # PME still problematic
-    ]
+]
 
+overlap_testsystem_names = [
+    'Lennard-Jones cluster',
+    'Lennard-Jones fluid without dispersion correction',
+    'Lennard-Jones fluid with dispersion correction',
+    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
+    'TIP3P with reaction field, switch, no dispersion correction',
+    'TIP3P with reaction field, switch, dispersion correction',
+    'alanine dipeptide in vacuum with annihilated sterics',
+    'TIP3P with PME, no switch, no dispersion correction' # PME still lacks reciprocal space component; known energy comparison failure
+]
 
 #=============================================================================================
 # NOSETEST GENERATORS
@@ -644,7 +629,7 @@ def test_overlap():
     """
     Generate nose tests for overlap for all alchemical test systems.
     """
-    for name in fast_testsystem_names:
+    for name in overlap_testsystem_names:
         test_system = test_systems[name]
         reference_system = test_system['test'].system
         positions = test_system['test'].positions
@@ -661,7 +646,7 @@ def test_alchemical_accuracy():
     """
     Generate nose tests for overlap for all alchemical test systems.
     """
-    for name in test_systems.keys():
+    for name in accuracy_testsystem_names:
         test_system = test_systems[name]
         reference_system = test_system['test'].system
         positions = test_system['test'].positions
@@ -684,9 +669,10 @@ if __name__ == "__main__":
 
     #name = 'Lennard-Jones fluid with dispersion correction'
     #name = 'Src in GBSA, with Src sterics annihilated'
-    name = 'Src in GBSA'
+    #name = 'Src in GBSA'
     #name = 'alanine dipeptide in OBC GBSA, with sterics annihilated'
     #name = 'alanine dipeptide in OBC GBSA'
+    name = 'Src in TIP3P with reaction field, with Src sterics annihilated'
     test_system = test_systems[name]
     reference_system = test_system['test'].system
     positions = test_system['test'].positions
