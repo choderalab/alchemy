@@ -39,11 +39,111 @@ from nose.plugins.skip import Skip, SkipTest
 
 kB = unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA # Boltzmann constant
 temperature = 300.0 * unit.kelvin # reference temperature
-MAX_DELTA = 0.01 * kB * temperature # maximum allowable deviation
+#MAX_DELTA = 0.01 * kB * temperature # maximum allowable deviation
+MAX_DELTA = 1.0 * kB * temperature # maximum allowable deviation
 
 #=============================================================================================
 # SUBROUTINES FOR TESTING
 #=============================================================================================
+
+def config_root_logger(verbose, log_file_path=None, mpicomm=None):
+    """Setup the the root logger's configuration.
+     The log messages are printed in the terminal and saved in the file specified
+     by log_file_path (if not None) and printed. Note that logging use sys.stdout
+     to print logging.INFO messages, and stderr for the others. The root logger's
+     configuration is inherited by the loggers created by logging.getLogger(name).
+     Different formats are used to display messages on the terminal and on the log
+     file. For example, in the log file every entry has a timestamp which does not
+     appear in the terminal. Moreover, the log file always shows the module that
+     generate the message, while in the terminal this happens only for messages
+     of level WARNING and higher.
+    Parameters
+    ----------
+    verbose : bool
+        Control the verbosity of the messages printed in the terminal. The logger
+        displays messages of level logging.INFO and higher when verbose=False.
+        Otherwise those of level logging.DEBUG and higher are printed.
+    log_file_path : str, optional, default = None
+        If not None, this is the path where all the logger's messages of level
+        logging.DEBUG or higher are saved.
+    mpicomm : mpi4py.MPI.COMM communicator, optional, default=None
+        If specified, this communicator will be used to determine node rank.
+    """
+
+    class TerminalFormatter(logging.Formatter):
+        """
+        Simplified format for INFO and DEBUG level log messages.
+        This allows to keep the logging.info() and debug() format separated from
+        the other levels where more information may be needed. For example, for
+        warning and error messages it is convenient to know also the module that
+        generates them.
+        """
+
+        # This is the cleanest way I found to make the code compatible with both
+        # Python 2 and Python 3
+        simple_fmt = logging.Formatter('%(asctime)-15s: %(message)s')
+        default_fmt = logging.Formatter('%(asctime)-15s: %(levelname)s - %(name)s - %(message)s')
+
+        def format(self, record):
+            if record.levelno <= logging.INFO:
+                return self.simple_fmt.format(record)
+            else:
+                return self.default_fmt.format(record)
+
+    # Check if root logger is already configured
+    n_handlers = len(logging.root.handlers)
+    if n_handlers > 0:
+        root_logger = logging.root
+        for i in xrange(n_handlers):
+            root_logger.removeHandler(root_logger.handlers[0])
+
+    # If this is a worker node, don't save any log file
+    if mpicomm:
+        rank = mpicomm.rank
+    else:
+        rank = 0
+
+    if rank != 0:
+        log_file_path = None
+
+    # Add handler for stdout and stderr messages
+    terminal_handler = logging.StreamHandler()
+    terminal_handler.setFormatter(TerminalFormatter())
+    if rank != 0:
+        terminal_handler.setLevel(logging.WARNING)
+    elif verbose:
+        terminal_handler.setLevel(logging.DEBUG)
+    else:
+        terminal_handler.setLevel(logging.INFO)
+    logging.root.addHandler(terminal_handler)
+
+    # Add file handler to root logger
+    if log_file_path is not None:
+        file_format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+        file_handler = logging.FileHandler(log_file_path)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(file_format))
+        logging.root.addHandler(file_handler)
+
+    # Do not handle logging.DEBUG at all if unnecessary
+    if log_file_path is not None:
+        logging.root.setLevel(logging.DEBUG)
+    else:
+        logging.root.setLevel(terminal_handler.level)
+
+def dump_xml(system=None, integrator=None, state=None):
+    """
+    Dump system, integrator, and state to XML for debugging.
+    """
+    from simtk.openmm import XmlSerializer
+    def write_file(filename, contents):
+        outfile = open(filename, 'w')
+        outfile.write(contents)
+        outfile.close()
+    if system: write_file('system.xml', XmlSerializer.serialize(system))
+    if integrator: write_file('integrator.xml', XmlSerializer.serialize(integrator))
+    if state: write_file('state.xml', XmlSerializer.serialize(state))
+    return
 
 def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
     # Compare energies.
@@ -60,17 +160,20 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
     potentials = list()
     states = list()
     for system in systems:
+        #dump_xml(system=system)
         integrator = openmm.VerletIntegrator(timestep)
+        #dump_xml(integrator=integrator)
         if platform:
             context = openmm.Context(system, integrator, platform)
         else:
             context = openmm.Context(system, integrator)
         context.setPositions(positions)
         state = context.getState(getEnergy=True, getPositions=True)
+        #dump_xml(system=system, integrator=integrator, state=state)
         potential = state.getPotentialEnergy()
         potentials.append(potential)
         states.append(state)
-        del context, integrator
+        del context, integrator, state
 
     logger.info("========")
     for i in range(len(systems)):
@@ -79,7 +182,7 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
             delta = potentials[i] - potentials[0]
             logger.info("%32s : %24.8f kcal/mol" % ('ERROR', delta / unit.kilocalories_per_mole))
             if (abs(delta) > MAX_DELTA):
-                raise Exception("Maximum allowable deviation (%24.8f kcal/mol) exceeded; test failed." % (MAX_DELTA / unit.kilocalories_per_mole))
+                raise Exception("Maximum allowable deviation exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
     return potentials
 
@@ -105,19 +208,11 @@ def alchemical_factory_check(reference_system, positions, receptor_atoms, ligand
     final_time = time.time()
     elapsed_time = final_time - initial_time
     logger.info("AbsoluteAlchemicalFactory initialization took %.3f s" % elapsed_time)
-
     platform = None
     if platform_name:
         platform = openmm.Platform.getPlatformByName(platform_name)
-
-    alchemical_system = factory.createPerturbedSystem(AlchemicalState())
-
-    # Serialize for debugging.
-    with open('system.xml', 'w') as outfile:
-        outfile.write(alchemical_system.__getstate__())
-
+    alchemical_system = factory.createPerturbedSystem()
     compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
-
     return
 
 def benchmark(reference_system, positions, receptor_atoms, ligand_atoms, platform_name=None, annihilate_electrostatics=True, annihilate_sterics=False, nsteps=500, timestep=1.0*unit.femtoseconds):
@@ -457,39 +552,73 @@ test_systems['TIP3P with reaction field, switch, dispersion correction'] = {
 test_systems['alanine dipeptide in vacuum'] = {
     'test' : testsystems.AlanineDipeptideVacuum(),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
+test_systems['alanine dipeptide in vacuum with annihilated sterics'] = {
+    'test' : testsystems.AlanineDipeptideVacuum(),
+    'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
 test_systems['alanine dipeptide in OBC GBSA'] = {
     'test' : testsystems.AlanineDipeptideImplicit(),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
+test_systems['alanine dipeptide in OBC GBSA, with sterics annihilated'] = {
+    'test' : testsystems.AlanineDipeptideImplicit(),
+    'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
 test_systems['alanine dipeptide in TIP3P with reaction field'] = {
     'test' : testsystems.AlanineDipeptideExplicit(nonbondedMethod=app.CutoffPeriodic),
     'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
 test_systems['T4 lysozyme L99A with p-xylene in OBC GBSA'] = {
     'test' : testsystems.LysozymeImplicit(),
     'ligand_atoms' : range(2603,2621), 'receptor_atoms' : range(0,2603) }
+test_systems['DHFR in explicit solvent with reaction field, annihilated'] = {
+    'test' : testsystems.DHFRExplicit(nonbondedMethod=app.CutoffPeriodic),
+    'ligand_atoms' : range(0,2849), 'receptor_atoms' : [],
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
+test_systems['Src in TIP3P with reaction field, with Src sterics annihilated'] = {
+    'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
+    'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
+test_systems['Src in GBSA'] = {
+    'test' : testsystems.SrcImplicit(),
+    'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
+    'annihilate_sterics' : False, 'annihilate_electrostatics' : False }
+test_systems['Src in GBSA, with Src sterics annihilated'] = {
+    'test' : testsystems.SrcImplicit(),
+    'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
 
 # Problematic tests: PME is not fully implemented yet
-#test_systems['TIP3P with PME, no switch, no dispersion correction'] = {
-#    'test' : testsystems.WaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.PME),
-#    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
+test_systems['TIP3P with PME, no switch, no dispersion correction'] = {
+    'test' : testsystems.WaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.PME),
+    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
 
 # Slow tests
 #test_systems['Src in OBC GBSA'] = {
 #    'test' : testsystems.SrcImplicit(),
-#    'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,4091) }
+#    'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,7208) }
 #test_systems['Src in TIP3P with reaction field'] = {
 #    'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
 #    'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,4091) }
 
-fast_testsystem_names = [
+accuracy_testsystem_names = [
     'Lennard-Jones cluster',
     'Lennard-Jones fluid without dispersion correction',
     'Lennard-Jones fluid with dispersion correction',
     'TIP3P with reaction field, no charges, no switch, no dispersion correction',
     'TIP3P with reaction field, switch, no dispersion correction',
     'TIP3P with reaction field, switch, dispersion correction',
-#    'TIP3P with PME, no switch, no dispersion correction' # PME still problematic
-    ]
+    'alanine dipeptide in vacuum with annihilated sterics',
+]
 
+overlap_testsystem_names = [
+    'Lennard-Jones cluster',
+    'Lennard-Jones fluid without dispersion correction',
+    'Lennard-Jones fluid with dispersion correction',
+    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
+    'TIP3P with reaction field, switch, no dispersion correction',
+    'TIP3P with reaction field, switch, dispersion correction',
+    'alanine dipeptide in vacuum with annihilated sterics',
+    'TIP3P with PME, no switch, no dispersion correction' # PME still lacks reciprocal space component; known energy comparison failure
+]
 
 #=============================================================================================
 # NOSETEST GENERATORS
@@ -500,13 +629,14 @@ def test_overlap():
     """
     Generate nose tests for overlap for all alchemical test systems.
     """
-    for name in fast_testsystem_names:
+    for name in overlap_testsystem_names:
         test_system = test_systems[name]
         reference_system = test_system['test'].system
         positions = test_system['test'].positions
         ligand_atoms = test_system['ligand_atoms']
         receptor_atoms = test_system['receptor_atoms']
-        f = partial(overlap_check, reference_system, positions, receptor_atoms, ligand_atoms)
+        annihilate_sterics = False if 'annihilate_sterics' not in test_system else test_system['annihilate_sterics']
+        f = partial(overlap_check, reference_system, positions, receptor_atoms, ligand_atoms, annihilate_sterics=annihilate_sterics)
         f.description = "Testing reference/alchemical overlap for %s..." % name
         yield f
 
@@ -516,13 +646,14 @@ def test_alchemical_accuracy():
     """
     Generate nose tests for overlap for all alchemical test systems.
     """
-    for name in test_systems.keys():
+    for name in accuracy_testsystem_names:
         test_system = test_systems[name]
         reference_system = test_system['test'].system
         positions = test_system['test'].positions
         ligand_atoms = test_system['ligand_atoms']
         receptor_atoms = test_system['receptor_atoms']
-        f = partial(alchemical_factory_check, reference_system, positions, receptor_atoms, ligand_atoms)
+        annihilate_sterics = False if 'annihilate_sterics' not in test_system else test_system['annihilate_sterics']
+        f = partial(alchemical_factory_check, reference_system, positions, receptor_atoms, ligand_atoms, annihilate_sterics=annihilate_sterics)
         f.description = "Testing alchemical fidelity of %s..." % name
         yield f
 
@@ -534,12 +665,14 @@ def test_alchemical_accuracy():
 
 if __name__ == "__main__":
     #generate_trace(test_systems['TIP3P with reaction field, switch, dispersion correction'])
+    config_root_logger(True)
 
-    test_systems = dict()
-    test_systems['Src in TIP3P with reaction field'] = {
-        'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
-        'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,4091) }
-    name = 'Src in TIP3P with reaction field'
+    #name = 'Lennard-Jones fluid with dispersion correction'
+    #name = 'Src in GBSA, with Src sterics annihilated'
+    #name = 'Src in GBSA'
+    #name = 'alanine dipeptide in OBC GBSA, with sterics annihilated'
+    #name = 'alanine dipeptide in OBC GBSA'
+    name = 'Src in TIP3P with reaction field, with Src sterics annihilated'
     test_system = test_systems[name]
     reference_system = test_system['test'].system
     positions = test_system['test'].positions
