@@ -19,10 +19,10 @@ install:
   - export CXX=g++
 
 script:
-  - conda config --add channels https://conda.binstar.org/${ORGNAME}
+  - conda config --add channels ${ORGNAME}
   - conda build devtools/conda-recipe
-  # Test the package.
   - source activate _test
+  - conda install --yes --quiet nose nose-timer
   - cd devtools && nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer && cd ..
 
 env:
