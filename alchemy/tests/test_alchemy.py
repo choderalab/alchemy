@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 from openmmtools import testsystems
 
-from .alchemy import AlchemicalState, AbsoluteAlchemicalFactory
+from alchemy import AlchemicalState, AbsoluteAlchemicalFactory
 
 from nose.plugins.skip import Skip, SkipTest
 
