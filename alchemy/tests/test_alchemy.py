@@ -186,25 +186,27 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
 
     return potentials
 
-def alchemical_factory_check(reference_system, positions, receptor_atoms, ligand_atoms, platform_name=None, annihilate_electrostatics=True, annihilate_sterics=False, precision=None):
+def alchemical_factory_check(reference_system, positions, platform_name=None, precision=None, factory_args=None):
     """
     Compare energies of reference system and fully-interacting alchemically modified system.
 
     ARGUMENTS
 
-    reference_system (simtk.openmm.System) - the reference System object to compare with
-    positions - the positions to assess energetics for
-    receptor_atoms (list of int) - the list of receptor atoms
-    ligand_atoms (list of int) - the list of ligand atoms to alchemically modify
+    reference_system : simtk.openmm.System
+       The reference System object to compare with
+    positions : simtk.unit.Quantity of dimentsion [natoms,3] with units compatible with angstroms
+       The positions to assess energetics for
     precision : str, optional, default=None
        Precision model, or default if not specified. ('single', 'double', 'mixed')
+    factory_args : dict(), optional, default=None
+       Arguments passed to AbsoluteAlchemicalFactory.
 
     """
 
     # Create a factory to produce alchemical intermediates.
     logger.info("Creating alchemical factory...")
     initial_time = time.time()
-    factory = AbsoluteAlchemicalFactory(reference_system, ligand_atoms=ligand_atoms, annihilate_electrostatics=annihilate_electrostatics, annihilate_sterics=annihilate_sterics)
+    factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
     final_time = time.time()
     elapsed_time = final_time - initial_time
     logger.info("AbsoluteAlchemicalFactory initialization took %.3f s" % elapsed_time)
@@ -215,7 +217,7 @@ def alchemical_factory_check(reference_system, positions, receptor_atoms, ligand
     compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
     return
 
-def benchmark(reference_system, positions, receptor_atoms, ligand_atoms, platform_name=None, annihilate_electrostatics=True, annihilate_sterics=False, nsteps=500, timestep=1.0*unit.femtoseconds):
+def benchmark(reference_system, positions, platform_name=None, nsteps=500, timestep=1.0*unit.femtoseconds, factory_args=None):
     """
     Benchmark performance of alchemically modified system relative to original system.
 
@@ -225,27 +227,21 @@ def benchmark(reference_system, positions, receptor_atoms, ligand_atoms, platfor
        The reference System object to compare with
     positions : simtk.unit.Quantity with units compatible with nanometers
        The positions to assess energetics for.
-    receptor_atoms : list of int
-       The list of receptor atoms.
-    ligand_atoms : list of int
-       The list of ligand atoms to alchemically modify.
     platform_name : str, optional, default=None
        The name of the platform to use for benchmarking.
-    annihilate_electrostatics : bool, optional, default=True
-       If True, electrostatics will be annihilated; if False, decoupled.
-    annihilate_sterics : bool, optional, default=False
-       If True, sterics will be annihilated; if False, decoupled.
     nsteps : int, optional, default=500
        Number of molecular dynamics steps to use for benchmarking.
     timestep : simtk.unit.Quantity with units compatible with femtoseconds, optional, default=1*femtoseconds
        Timestep to use for benchmarking.
+    factory_args : dict(), optional, default=None
+       Arguments passed to AbsoluteAlchemicalFactory.
 
     """
 
     # Create a factory to produce alchemical intermediates.
     logger.info("Creating alchemical factory...")
     initial_time = time.time()
-    factory = AbsoluteAlchemicalFactory(reference_system, ligand_atoms=ligand_atoms, annihilate_electrostatics=annihilate_electrostatics, annihilate_sterics=annihilate_sterics)
+    factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
     final_time = time.time()
     elapsed_time = final_time - initial_time
     logger.info("AbsoluteAlchemicalFactory initialization took %.3f s" % elapsed_time)
@@ -313,7 +309,7 @@ def benchmark(reference_system, positions, receptor_atoms, ligand_atoms, platfor
 
     return delta
 
-def overlap_check(reference_system, positions, receptor_atoms, ligand_atoms, platform_name=None, annihilate_electrostatics=True, annihilate_sterics=False, precision=None, nsteps=50, nsamples=200):
+def overlap_check(reference_system, positions, platform_name=None, precision=None, nsteps=50, nsamples=200, factory_args=None):
     """
     Test overlap between reference system and alchemical system by running a short simulation.
 
@@ -323,25 +319,19 @@ def overlap_check(reference_system, positions, receptor_atoms, ligand_atoms, pla
        The reference System object to compare with
     positions : simtk.unit.Quantity with units compatible with nanometers
        The positions to assess energetics for.
-    receptor_atoms : list of int
-       The list of receptor atoms.
-    ligand_atoms : list of int
-       The list of ligand atoms to alchemically modify.
     platform_name : str, optional, default=None
        The name of the platform to use for benchmarking.
-    annihilate_electrostatics : bool, optional, default=True
-       If True, electrostatics will be annihilated; if False, decoupled.
-    annihilate_sterics : bool, optional, default=False
-       If True, sterics will be annihilated; if False, decoupled.
     nsteps : int, optional, default=50
        Number of molecular dynamics steps between samples.
     nsamples : int, optional, default=100
        Number of samples to collect.
+    factory_args : dict(), optional, default=None
+       Arguments passed to AbsoluteAlchemicalFactory.
 
     """
 
     # Create a fully-interacting alchemical state.
-    factory = AbsoluteAlchemicalFactory(reference_system, ligand_atoms=ligand_atoms)
+    factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
     alchemical_state = AlchemicalState()
     alchemical_system = factory.createPerturbedSystem(alchemical_state)
 
@@ -452,13 +442,14 @@ def rstyle(ax):
     ax.xaxis.set_ticks_position('bottom')
     ax.yaxis.set_ticks_position('left')
 
-def lambda_trace(reference_system, positions, receptor_atoms, ligand_atoms, platform_name=None, precision=None, annihilate_electrostatics=True, annihilate_sterics=False, nsteps=100):
+def lambda_trace(reference_system, positions, platform_name=None, precision=None, nsteps=100, factory_args=None):
     """
     Compute potential energy as a function of lambda.
 
     """
+
     # Create a factory to produce alchemical intermediates.
-    factory = AbsoluteAlchemicalFactory(reference_system, ligand_atoms=ligand_atoms, annihilate_electrostatics=annihilate_electrostatics, annihilate_sterics=annihilate_sterics)
+    factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
 
     platform = None
     if platform_name:
@@ -530,66 +521,71 @@ def generate_trace(test_system):
 test_systems = dict()
 test_systems['Lennard-Jones cluster'] = {
     'test' : testsystems.LennardJonesCluster(),
-    'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }
+    'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }}
 test_systems['Lennard-Jones fluid without dispersion correction'] = {
     'test' : testsystems.LennardJonesFluid(dispersion_correction=False),
-    'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }
+    'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }}
 test_systems['Lennard-Jones fluid with dispersion correction'] = {
     'test' : testsystems.LennardJonesFluid(dispersion_correction=True),
-    'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }
+    'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }}
 test_systems['TIP3P with reaction field, no charges, no switch, no dispersion correction'] = {
     'test' : testsystems.DischargedWaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
+    'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }}
 test_systems['TIP3P with reaction field, switch, no dispersion correction'] = {
     'test' : testsystems.WaterBox(dispersion_correction=False, switch=True, nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
+    'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }}
 test_systems['TIP3P with reaction field, no switch, dispersion correction'] = {
     'test' : testsystems.WaterBox(dispersion_correction=True, switch=False, nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
+    'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }}
 test_systems['TIP3P with reaction field, switch, dispersion correction'] = {
     'test' : testsystems.WaterBox(dispersion_correction=True, switch=True, nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
+    'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }}
 test_systems['alanine dipeptide in vacuum'] = {
     'test' : testsystems.AlanineDipeptideVacuum(),
-    'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
+    'factory_args' : {'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }}
 test_systems['alanine dipeptide in vacuum with annihilated sterics'] = {
     'test' : testsystems.AlanineDipeptideVacuum(),
-    'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
-    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
+    'factory_args' : {'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }}
 test_systems['alanine dipeptide in OBC GBSA'] = {
     'test' : testsystems.AlanineDipeptideImplicit(),
-    'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
+    'factory_args' : {'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }}
 test_systems['alanine dipeptide in OBC GBSA, with sterics annihilated'] = {
     'test' : testsystems.AlanineDipeptideImplicit(),
-    'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
-    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
+    'factory_args' : {'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }}
 test_systems['alanine dipeptide in TIP3P with reaction field'] = {
     'test' : testsystems.AlanineDipeptideExplicit(nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }
+    'factory_args' : {'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }}
 test_systems['T4 lysozyme L99A with p-xylene in OBC GBSA'] = {
     'test' : testsystems.LysozymeImplicit(),
-    'ligand_atoms' : range(2603,2621), 'receptor_atoms' : range(0,2603) }
+    'factory_args' : {'ligand_atoms' : range(2603,2621), 'receptor_atoms' : range(0,2603) }}
 test_systems['DHFR in explicit solvent with reaction field, annihilated'] = {
     'test' : testsystems.DHFRExplicit(nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,2849), 'receptor_atoms' : [],
-    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
+    'factory_args' : {'ligand_atoms' : range(0,2849), 'receptor_atoms' : [],
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }}
 test_systems['Src in TIP3P with reaction field, with Src sterics annihilated'] = {
     'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
-    'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
-    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
+    'factory_args' : {'ligand_atoms' : range(0,4428), 'receptor_atoms' : [],
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }}
 test_systems['Src in GBSA'] = {
     'test' : testsystems.SrcImplicit(),
-    'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
-    'annihilate_sterics' : False, 'annihilate_electrostatics' : False }
+    'factory_args' : {'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
+    'annihilate_sterics' : False, 'annihilate_electrostatics' : False }}
 test_systems['Src in GBSA, with Src sterics annihilated'] = {
     'test' : testsystems.SrcImplicit(),
-    'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
-    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
+    'factory_args' : {'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
+    'annihilate_sterics' : True, 'annihilate_electrostatics' : True }}
 
 # Problematic tests: PME is not fully implemented yet
 test_systems['TIP3P with PME, no switch, no dispersion correction'] = {
     'test' : testsystems.WaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.PME),
-    'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }
+    'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }}
+
+test_systems['toluene in implicit solvent'] = {
+    'test' : testsystems.TolueneImplicit(),
+    'factory_args' : {'ligand_atoms' : [0,1], 'receptor_atoms' : list(),
+    'alchemical_torsions' : True, 'alchemical_angles' : True, 'annihilate_sterics' : True, 'annihilate_electrostatics' : True }}
 
 # Slow tests
 #test_systems['Src in OBC GBSA'] = {
@@ -607,6 +603,7 @@ accuracy_testsystem_names = [
     'TIP3P with reaction field, switch, no dispersion correction',
     'TIP3P with reaction field, switch, dispersion correction',
     'alanine dipeptide in vacuum with annihilated sterics',
+    'toluene in implicit solvent',
 ]
 
 overlap_testsystem_names = [
@@ -617,7 +614,8 @@ overlap_testsystem_names = [
     'TIP3P with reaction field, switch, no dispersion correction',
     'TIP3P with reaction field, switch, dispersion correction',
     'alanine dipeptide in vacuum with annihilated sterics',
-    'TIP3P with PME, no switch, no dispersion correction' # PME still lacks reciprocal space component; known energy comparison failure
+    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
+    'toluene in implicit solvent',
 ]
 
 #=============================================================================================
@@ -633,10 +631,8 @@ def test_overlap():
         test_system = test_systems[name]
         reference_system = test_system['test'].system
         positions = test_system['test'].positions
-        ligand_atoms = test_system['ligand_atoms']
-        receptor_atoms = test_system['receptor_atoms']
-        annihilate_sterics = False if 'annihilate_sterics' not in test_system else test_system['annihilate_sterics']
-        f = partial(overlap_check, reference_system, positions, receptor_atoms, ligand_atoms, annihilate_sterics=annihilate_sterics)
+        factory_args = test_system['factory_args']
+        f = partial(overlap_check, reference_system, positions, factory_args=factory_args)
         f.description = "Testing reference/alchemical overlap for %s..." % name
         yield f
 
@@ -650,10 +646,8 @@ def test_alchemical_accuracy():
         test_system = test_systems[name]
         reference_system = test_system['test'].system
         positions = test_system['test'].positions
-        ligand_atoms = test_system['ligand_atoms']
-        receptor_atoms = test_system['receptor_atoms']
-        annihilate_sterics = False if 'annihilate_sterics' not in test_system else test_system['annihilate_sterics']
-        f = partial(alchemical_factory_check, reference_system, positions, receptor_atoms, ligand_atoms, annihilate_sterics=annihilate_sterics)
+        factory_args = test_system['factory_args']
+        f = partial(alchemical_factory_check, reference_system, positions, factory_args=factory_args)
         f.description = "Testing alchemical fidelity of %s..." % name
         yield f
 
