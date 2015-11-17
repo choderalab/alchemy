@@ -362,6 +362,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
     reference_context.setPositions(positions)
     du_n = np.zeros([nsamples], np.float64) # du_n[n] is the
     progress = ProgressBar()
+    print()
     for sample in progress(range(nsamples)):
         # Run dynamics.
         reference_integrator.step(nsteps)
