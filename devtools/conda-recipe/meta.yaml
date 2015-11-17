@@ -27,6 +27,7 @@ test:
     - nose-timer
     - pymbar
     - openmmtools
+    - progressbar
 
   imports:
     - alchemy

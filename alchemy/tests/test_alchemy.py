@@ -32,6 +32,7 @@ from openmmtools import testsystems
 from alchemy import AlchemicalState, AbsoluteAlchemicalFactory
 
 from nose.plugins.skip import Skip, SkipTest
+from progressbar import ProgressBar
 
 #=============================================================================================
 # CONSTANTS
@@ -360,7 +361,8 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
     # Collect simulation data.
     reference_context.setPositions(positions)
     du_n = np.zeros([nsamples], np.float64) # du_n[n] is the
-    for sample in range(nsamples):
+    progress = ProgressBar()
+    for sample in progress(range(nsamples)):
         # Run dynamics.
         reference_integrator.step(nsteps)
 
@@ -673,4 +675,3 @@ if __name__ == "__main__":
     ligand_atoms = test_system['ligand_atoms']
     receptor_atoms = test_system['receptor_atoms']
     alchemical_factory_check(reference_system, positions, receptor_atoms, ligand_atoms)
-
