@@ -27,6 +27,7 @@ test:
     - nose-timer
     - pymbar
     - openmmtools
+    - click
 
   imports:
     - alchemy

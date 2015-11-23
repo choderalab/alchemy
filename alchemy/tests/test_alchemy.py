@@ -360,20 +360,23 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
     # Collect simulation data.
     reference_context.setPositions(positions)
     du_n = np.zeros([nsamples], np.float64) # du_n[n] is the
-    for sample in range(nsamples):
-        # Run dynamics.
-        reference_integrator.step(nsteps)
+    print()
+    import click
+    with click.progressbar(range(nsamples)) as bar:
+        for sample in bar:
+            # Run dynamics.
+            reference_integrator.step(nsteps)
 
-        # Get reference energies.
-        reference_state = reference_context.getState(getEnergy=True, getPositions=True)
-        reference_potential = reference_state.getPotentialEnergy()
+            # Get reference energies.
+            reference_state = reference_context.getState(getEnergy=True, getPositions=True)
+            reference_potential = reference_state.getPotentialEnergy()
 
-        # Get alchemical energies.
-        alchemical_context.setPositions(reference_state.getPositions())
-        alchemical_state = alchemical_context.getState(getEnergy=True)
-        alchemical_potential = alchemical_state.getPotentialEnergy()
+            # Get alchemical energies.
+            alchemical_context.setPositions(reference_state.getPositions())
+            alchemical_state = alchemical_context.getState(getEnergy=True)
+            alchemical_potential = alchemical_state.getPotentialEnergy()
 
-        du_n[sample] = (alchemical_potential - reference_potential) / kT
+            du_n[sample] = (alchemical_potential - reference_potential) / kT
 
     # Clean up.
     del reference_context, alchemical_context
@@ -673,4 +676,3 @@ if __name__ == "__main__":
     ligand_atoms = test_system['ligand_atoms']
     receptor_atoms = test_system['receptor_atoms']
     alchemical_factory_check(reference_system, positions, receptor_atoms, ligand_atoms)
-
