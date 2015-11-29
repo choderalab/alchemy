@@ -376,7 +376,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
         if cache_mode == 'write':
             # If anything went wrong, create a new cache.
             (pathname, filename) = os.path.split(cached_trajectory_filename)
-            os.makedirs(pathname)
+            if not os.path.exists(pathname): os.makedirs(pathname)
             ncfile = Dataset(cached_trajectory_filename, 'w', format='NETCDF4')
             ncfile.createDimension('samples', nsamples)
             ncfile.createDimension('atoms', reference_system.getNumParticles())
@@ -671,7 +671,7 @@ def test_overlap():
         reference_system = test_system['test'].system
         positions = test_system['test'].positions
         factory_args = test_system['factory_args']
-        cached_trajectory_filename = os.path.join(os.env('HOME'), '.cache', 'alchemy', 'tests', name + '.nc')
+        cached_trajectory_filename = os.path.join(os.environ['HOME'], '.cache', 'alchemy', 'tests', name + '.nc')
         f = partial(overlap_check, reference_system, positions, factory_args=factory_args, cached_trajectory_filename=cached_trajectory_filename)
         f.description = "Testing reference/alchemical overlap for %s..." % name
         yield f

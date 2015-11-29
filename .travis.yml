@@ -12,6 +12,10 @@ addons:
       #- g++-multilib
       #- gcc-multilib
 
+cache:
+  directories:
+    - $HOME/.cache/
+
 install:
   - source devtools/travis-ci/install.sh
   - export PYTHONUNBUFFERED=true
