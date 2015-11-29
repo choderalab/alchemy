@@ -13,7 +13,7 @@ Tests for alchemical factory in `alchemy.py`.
 # GLOBAL IMPORTS
 #=============================================================================================
 
-import os
+import os, os.path
 import numpy as np
 import time
 from functools import partial
@@ -309,7 +309,7 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
 
     return delta
 
-def overlap_check(reference_system, positions, platform_name=None, precision=None, nsteps=50, nsamples=200, factory_args=None):
+def overlap_check(reference_system, positions, platform_name=None, precision=None, nsteps=50, nsamples=200, factory_args=None, cached_trajectory_filename=None):
     """
     Test overlap between reference system and alchemical system by running a short simulation.
 
@@ -327,6 +327,8 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
        Number of samples to collect.
     factory_args : dict(), optional, default=None
        Arguments passed to AbsoluteAlchemicalFactory.
+    cached_trajectory_filename : str, optional, default=None
+       If specified, attempt to cache (or reuse) trajectory.
 
     """
 
@@ -357,6 +359,30 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
         reference_context = openmm.Context(reference_system, reference_integrator)
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator)
 
+    if cached_trajectory_filename:
+        cache_mode = 'write'
+
+        # Try reading from cache
+        from netCDF4 import Dataset
+        if os.path.exists(cached_trajectory_filename):
+            try:
+                ncfile = Dataset(cached_trajectory_filename, 'r')
+                if (ncfile.variables['positions'].shape == (nsamples, reference_system.getNumParticles(), 3)):
+                    # Read the cache if everything matches
+                    cache_mode = 'read'
+            except:
+                pass
+
+        if cache_mode == 'write':
+            # If anything went wrong, create a new cache.
+            (pathname, filename) = os.path.split(cached_trajectory_filename)
+            if not os.path.exists(pathname): os.makedirs(pathname)
+            ncfile = Dataset(cached_trajectory_filename, 'w', format='NETCDF4')
+            ncfile.createDimension('samples', 0)
+            ncfile.createDimension('atoms', reference_system.getNumParticles())
+            ncfile.createDimension('spatial', 3)
+            ncfile.createVariable('positions', 'f4', ('samples', 'atoms', 'spatial'))
+
     # Collect simulation data.
     reference_context.setPositions(positions)
     du_n = np.zeros([nsamples], np.float64) # du_n[n] is the
@@ -364,22 +390,36 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
     import click
     with click.progressbar(range(nsamples)) as bar:
         for sample in bar:
-            # Run dynamics.
-            reference_integrator.step(nsteps)
+            if cached_trajectory_filename and (cache_mode == 'read'):
+                # Load cached frames.
+                positions = unit.Quantity(ncfile.variables['positions'][sample,:,:], unit.nanometers)
+                reference_context.setPositions(positions)
+            else:
+                # Run dynamics.
+                reference_integrator.step(nsteps)
 
             # Get reference energies.
             reference_state = reference_context.getState(getEnergy=True, getPositions=True)
             reference_potential = reference_state.getPotentialEnergy()
+            if np.isnan(reference_potential/kT):
+                raise Exception("Reference potential is NaN")
 
             # Get alchemical energies.
-            alchemical_context.setPositions(reference_state.getPositions())
+            alchemical_context.setPositions(reference_state.getPositions(asNumpy=True))
             alchemical_state = alchemical_context.getState(getEnergy=True)
             alchemical_potential = alchemical_state.getPotentialEnergy()
+            if np.isnan(alchemical_potential/kT):
+                raise Exception("Alchemical potential is NaN")
 
             du_n[sample] = (alchemical_potential - reference_potential) / kT
 
+            if cached_trajectory_filename and (cache_mode == 'write'):
+                ncfile.variables['positions'][sample,:,:] = reference_state.getPositions(asNumpy=True) / unit.nanometers
+
     # Clean up.
     del reference_context, alchemical_context
+    if cached_trajectory_filename:
+        ncfile.close()
 
     # Discard data to equilibration and subsample.
     from pymbar import timeseries
@@ -635,7 +675,8 @@ def test_overlap():
         reference_system = test_system['test'].system
         positions = test_system['test'].positions
         factory_args = test_system['factory_args']
-        f = partial(overlap_check, reference_system, positions, factory_args=factory_args)
+        cached_trajectory_filename = os.path.join(os.environ['HOME'], '.cache', 'alchemy', 'tests', name + '.nc')
+        f = partial(overlap_check, reference_system, positions, factory_args=factory_args, cached_trajectory_filename=cached_trajectory_filename)
         f.description = "Testing reference/alchemical overlap for %s..." % name
         yield f
 
