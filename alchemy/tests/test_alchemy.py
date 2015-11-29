@@ -378,7 +378,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
             (pathname, filename) = os.path.split(cached_trajectory_filename)
             if not os.path.exists(pathname): os.makedirs(pathname)
             ncfile = Dataset(cached_trajectory_filename, 'w', format='NETCDF4')
-            ncfile.createDimension('samples', nsamples)
+            ncfile.createDimension('samples', 0)
             ncfile.createDimension('atoms', reference_system.getNumParticles())
             ncfile.createDimension('spatial', 3)
             ncfile.createVariable('positions', 'f4', ('samples', 'atoms', 'spatial'))
