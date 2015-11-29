@@ -401,11 +401,15 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
             # Get reference energies.
             reference_state = reference_context.getState(getEnergy=True, getPositions=True)
             reference_potential = reference_state.getPotentialEnergy()
+            if np.isnan(reference_potential/kT):
+                raise Exception("Reference potential is NaN")
 
             # Get alchemical energies.
             alchemical_context.setPositions(reference_state.getPositions(asNumpy=True))
             alchemical_state = alchemical_context.getState(getEnergy=True)
             alchemical_potential = alchemical_state.getPotentialEnergy()
+            if np.isnan(alchemical_potential/kT):
+                raise Exception("Alchemical potential is NaN")
 
             du_n[sample] = (alchemical_potential - reference_potential) / kT
 
