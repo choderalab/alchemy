@@ -586,6 +586,10 @@ test_systems['TIP3P with reaction field, switch, dispersion correction'] = {
 test_systems['alanine dipeptide in vacuum'] = {
     'test' : testsystems.AlanineDipeptideVacuum(),
     'factory_args' : {'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }}
+test_systems['alanine dipeptide in vacuum with annihilated bonds, angles, and torsions'] = {
+    'test' : testsystems.AlanineDipeptideVacuum(),
+    'factory_args' : {'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
+    'alchemical_torsions' : True, 'alchemical_angles' : True, 'alchemical_bonds' : True }}
 test_systems['alanine dipeptide in vacuum with annihilated sterics'] = {
     'test' : testsystems.AlanineDipeptideVacuum(),
     'factory_args' : {'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22),
