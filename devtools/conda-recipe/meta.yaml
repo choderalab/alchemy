@@ -13,22 +13,22 @@ requirements:
   build:
     - python
     - setuptools
-    - openmm
     - numpy
+    - openmm-dev
 
   run:
     - python
-    - openmm
     - numpy
+    - openmm-dev
 
 test:
   requires:
     - nose
     - nose-timer
-    - pymbar
-    - openmmtools
     - click
     - netcdf4
+    - pymbar-dev
+    - openmmtools-dev
 
   imports:
     - alchemy
