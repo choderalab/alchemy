@@ -32,3 +32,16 @@ protocol = factory.defaultComplexProtocolImplicit()
 # Create the perturbed systems using this protocol.
 systems = factory.createPerturbedSystems(protocol)
 ```
+
+## Changelog
+
+### 1.2 - Expose softcore parameters as context parameters
+Alchemical softcore parameters are now exposed as context parameters, and can be tweaked on the fly.
+The default selection of softcore c was also changed.
+
+### 1.1 - Allow bonds, angles, and torsions to be alchemically softened
+This release allows specified bonds, angles, and torsions to be alchemically softened.
+1.1.1 was a critical bugfix release.
+
+### 1.0 - Initial release
+This release breaks out `alchemy.py` from the [`yank`](http://github.com/choderalab/yank) project
