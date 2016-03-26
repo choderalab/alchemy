@@ -15,6 +15,7 @@ Tests for alchemical factory in `alchemy.py`.
 
 import os, os.path
 import numpy as np
+import copy
 import time
 from functools import partial
 
@@ -664,6 +665,40 @@ overlap_testsystem_names = [
     'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
     'toluene in implicit solvent',
 ]
+
+#=============================================================================================
+# Test various options to AbsoluteAlchemicalFactory
+#=============================================================================================
+
+def test_alchemical_functions():
+    """
+    Testing alchemical slave functions
+    """
+    alchemical_functions = { 'lambda_sterics' : 'lambda', 'lambda_electrostatics' : 'lambda', 'lambda_bonds' : 'lambda', 'lambda_angles' : 'lambda', 'lambda_torsions' : 'lambda' }
+    name = 'Lennard-Jones fluid with dispersion correction'
+    test_system = copy.deepcopy(test_systems[name])
+    reference_system = test_system['test'].system
+    positions = test_system['test'].positions
+    factory_args = test_system['factory_args']
+    factory_args['alchemical_functions'] = alchemical_functions
+    factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
+    alchemical_system = factory.createPerturbedSystem()
+    compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'])
+
+def test_softcore_parameters():
+    """
+    Testing alchemical slave functions
+    """
+    alchemical_functions = { 'lambda_sterics' : 'lambda', 'lambda_electrostatics' : 'lambda', 'lambda_bonds' : 'lambda', 'lambda_angles' : 'lambda', 'lambda_torsions' : 'lambda' }
+    name = 'Lennard-Jones fluid with dispersion correction'
+    test_system = copy.deepcopy(test_systems[name])
+    reference_system = test_system['test'].system
+    positions = test_system['test'].positions
+    factory_args = test_system['factory_args']
+    factory_args.update({ 'softcore_alpha' : 1.0, 'softcore_beta' : 0.0, 'softcore_a' : 1.0, 'softcore_b' : 1.0, 'softcore_c' : 1.0 })
+    factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
+    alchemical_system = factory.createPerturbedSystem()
+    compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'])
 
 #=============================================================================================
 # NOSETEST GENERATORS
