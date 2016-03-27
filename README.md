@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/choderalab/alchemy.svg?branch=master)](https://travis-ci.org/choderalab/alchemy)
+[![Anaconda Badge](https://binstar.org/omnia/alchemy/badges/version.svg)](https://binstar.org/omnia/alchemy)
 
 # Alchemical tools for OpenMM
 
