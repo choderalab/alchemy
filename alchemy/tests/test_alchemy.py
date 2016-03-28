@@ -568,7 +568,7 @@ test_systems['Lennard-Jones cluster'] = {
     'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }}
 test_systems['Lennard-Jones cluster with modified softcore parameters'] = {
     'test' : testsystems.LennardJonesCluster(),
-    'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2), 'softcore_a' : 2, 'softcore_b' : 2, 'softcore_c' :2 }}
+    'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2), 'softcore_alpha' : 1, 'softcore_beta' : 1, 'softcore_a' : 2, 'softcore_b' : 2, 'softcore_c' : 2, 'softcore_d' : 2, 'softcore_e' : 2, 'softcore_f' : 2 }}
 test_systems['Lennard-Jones fluid without dispersion correction'] = {
     'test' : testsystems.LennardJonesFluid(dispersion_correction=False),
     'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }}
@@ -701,7 +701,7 @@ def test_softcore_parameters():
     reference_system = test_system['test'].system
     positions = test_system['test'].positions
     factory_args = test_system['factory_args']
-    factory_args.update({ 'softcore_alpha' : 1.0, 'softcore_beta' : 0.0, 'softcore_a' : 1.0, 'softcore_b' : 1.0, 'softcore_c' : 1.0 })
+    factory_args.update({ 'softcore_alpha' : 1.0, 'softcore_beta' : 1.0, 'softcore_a' : 1.0, 'softcore_b' : 1.0, 'softcore_c' : 1.0, 'softcore_d' : 1.0, 'softcore_e' : 1.0, 'softcore_f' : 1.0 })
     factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
     alchemical_system = factory.createPerturbedSystem()
     compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'])
