@@ -566,6 +566,9 @@ test_systems = dict()
 test_systems['Lennard-Jones cluster'] = {
     'test' : testsystems.LennardJonesCluster(),
     'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }}
+test_systems['Lennard-Jones cluster with modified softcore parameters'] = {
+    'test' : testsystems.LennardJonesCluster(),
+    'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2), 'softcore_a' : 2, 'softcore_b' : 2, 'softcore_c' :2 }}
 test_systems['Lennard-Jones fluid without dispersion correction'] = {
     'test' : testsystems.LennardJonesFluid(dispersion_correction=False),
     'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }}
@@ -584,6 +587,9 @@ test_systems['TIP3P with reaction field, no switch, dispersion correction'] = {
 test_systems['TIP3P with reaction field, switch, dispersion correction'] = {
     'test' : testsystems.WaterBox(dispersion_correction=True, switch=True, nonbondedMethod=app.CutoffPeriodic),
     'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }}
+test_systems['TIP3P with reaction field, switch, dispersion correctionm, electrostatics scaling followed by softcore Lennard-Jones'] = {
+    'test' : testsystems.WaterBox(dispersion_correction=True, switch=True, nonbondedMethod=app.CutoffPeriodic),
+    'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6), 'softcore_beta' : 0.0, 'alchemical_functions' : { 'lambda_sterics' : '2*lambda * step(0.5 - lambda)', 'lambda_electrostatics' : '2*(lambda - 0.5) * step(lambda - 0.5)' }}}
 test_systems['alanine dipeptide in vacuum'] = {
     'test' : testsystems.AlanineDipeptideVacuum(),
     'factory_args' : {'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }}
