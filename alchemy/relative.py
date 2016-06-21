@@ -39,6 +39,7 @@ class HybridTopologyFactory(object):
     def createPerturbedSystem(self):
 
         system2_atoms = list(self.topology2.atoms())
+        system1_atoms = list(self.topology1.atoms())
 
         system = copy.deepcopy(self.system1)
         topology = copy.deepcopy(self.topology1)
@@ -50,15 +51,27 @@ class HybridTopologyFactory(object):
         mapping2 = self.atom_mapping_2to1
         common1 = mapping1.keys()
         common2 = mapping2.keys()
+        assert len(common1) == len(common2)
+        for atom1idx, atom2idx in self.atom_mapping_1to2.items():
+            atom1 = system1_atoms[atom1idx]
+            atom2 = system2_atoms[atom2idx]
+            if not atom1.name == atom2.name:
+                print(atom1.name, atom2.name, atom1.residue.name, atom2.residue.name)
+            if not atom1.residue.index == atom2.residue.index:
+                print(atom1.residue, atom2.residue)
 
         #sys2_indices_in_system = dict() # ? --> also do i actually need to add the core ones in here or who cares?
-        sys2_indices_in_system = self.atom_mapping_2to1
+        sys2_indices_in_system = copy.deepcopy(self.atom_mapping_2to1)
 
         residues_2_to_sys = dict()
-        for index2, index1 in sys2_indices_in_system.items():
-            atom1 = list(topology.atoms())[index1]
+        for index2, index in sys2_indices_in_system.items():
+            atom = list(topology.atoms())[index]
             atom2 = system2_atoms[index2]
-            residues_2_to_sys[atom2.residue] = atom1.residue
+            if not atom.name == atom2.name:
+                print(atom.name, atom2.name, atom.residue, atom2.residue)
+            if not atom.residue.name == atom2.residue.name:
+                print(atom.residue, atom2.residue)
+            residues_2_to_sys[atom2.residue] = atom.residue
 
         for atom2 in self.unique_atoms2: # atom2 will be an index...?
             atom = system2_atoms[atom2]
@@ -71,7 +84,7 @@ class HybridTopologyFactory(object):
             sys2_indices_in_system[atom2] = index
             topology.addAtom(name, element, residue)
 
-        sys2_indices_in_system = [sys2_indices_in_system[atom2] for atom2 in range(len(system2_atoms))]
+        #sys2_indices_in_system = sys2_indices_in_system.values()
 
         # Handle constraints.
         print "Adding constraints from system2..."
@@ -265,17 +278,17 @@ class HybridTopologyFactory(object):
                 #
 
                 # Create index of torsions in system, system1, and system2.
-                def unique(*args):
-                    if args[0] > args[-1]:
-                        return tuple(reversed(args))
+                def unique(atom_list):
+                    if atom_list[0] > atom_list[-1]:
+                        return tuple(reversed(atom_list))
                     else:
-                        return tuple(args)
+                        return tuple(atom_list)
 
                 def index_torsions(force):
                     torsions = dict()
                     for index in range(force.getNumTorsions()):
                         [atom_i, atom_j, atom_k, atom_l, periodicity, phase, K] = force.getTorsionParameters(index)
-                        key = unique(atom_i, atom_j, atom_k, atom_l) # unique tuple, possibly in reverse order
+                        key = unique([atom_i, atom_j, atom_k, atom_l]) # unique tuple, possibly in reverse order
                         torsions[key] = index
                     return torsions
 
@@ -292,20 +305,30 @@ class HybridTopologyFactory(object):
                 print "Building a list of shared torsions..."
                 shared_torsions = list()
                 for atoms2 in torsions2:
+                    atoms2 = list(atoms2)
                     if set(atoms2).issubset(common2):
-                        atoms  = tuple(sys2_indices_in_system[atom2] for atom2 in atoms2)
-                        atoms1 = tuple(mapping2[atom2] for atom2 in atoms2)
+                        atoms  = [sys2_indices_in_system[atom2] for atom2 in atoms2]
+                        atoms1 = [mapping2[atom2] for atom2 in atoms2]
                         # Find torsion index terms.
                         try:
-                            index  = torsions[unique(*atoms)]
-                            index1 = torsions1[unique(*atoms1)]
-                            index2 = torsions2[unique(*atoms2)]
+                            index  = torsions[unique(atoms)]
+                            index1 = torsions1[unique(atoms1)]
+                            index2 = torsions2[unique(atoms2)]
                         except Exception as e:
-                            print e
-                            print "torsions :  %s" % str(unique(*atoms))
-                            print "torsions1:  %s" % str(unique(*atoms1))
-                            print "torsions2:  %s" % str(unique(*atoms2))
-                            raise Exception("Error occurred in building a list of torsions common to all molecules.")
+                            print("Error occurred in building a list of torsions common to all molecules.")
+                            residues = [list(topology.atoms())[atom].residue for atom in atoms]
+                            print(residues)
+                            residues = [system2_atoms[atom].residue for atom in atoms2]
+                            print(residues)
+                            atom_names = [list(topology.atoms())[atom] for atom in atoms]
+                            print(atom_names)
+                            atom_names = [system2_atoms[atom] for atom in atoms2]
+                            print(atom_names)
+                            print("Error occurred in building a list of torsions common to all molecules.")
+                            print "torsions :  %s" % str(unique(atoms))
+                            print "torsions1:  %s" % str(unique(atoms1))
+                            print "torsions2:  %s" % str(unique(atoms2))
+                            raise(e)
 
                         # Store.
                         shared_torsions.append( (index, index1, index2) )
@@ -352,16 +375,17 @@ class HybridTopologyFactory(object):
                 #
   
                 # Add nonbonded entries for molecule2 to ensure total number of particle entries is correct.
-                for atom in unique2:
+                for atom in self.unique_atoms2:
                     [charge, sigma, epsilon] = force2.getParticleParameters(atom)
                     force.addParticle(charge, sigma, epsilon)
 
                 # Zero out nonbonded entries for molecule1.
-                for atom in molecule1_indices_in_system:
+                for atom_obj in system1_atoms:
+                    atom = atom_obj.index
                     [charge, sigma, epsilon] = force.getParticleParameters(atom)
                     force.setParticleParameters(atom, 0*charge, sigma, 0*epsilon)
                 # Zero out nonbonded entries for molecule2.
-                for atom in sys2_indices_in_system:
+                for atom in sys2_indices_in_system.values():
                     [charge, sigma, epsilon] = force.getParticleParameters(atom)
                     force.setParticleParameters(atom, 0*charge, sigma, 0*epsilon)
 
@@ -412,7 +436,7 @@ class HybridTopologyFactory(object):
                     force.addException(atom_i, atom_j, chargeProd, sigma, epsilon)
 
                 # Create list of alchemically modified atoms in system.
-                alchemical_atom_indices = list(set(molecule1_indices_in_system).union(set(sys2_indices_in_system)))
+                alchemical_atom_indices = list(set([atom.index for atom in system1_atoms]).union(set(sys2_indices_in_system.values())))
 
                 # Create atom groups.
                 natoms = system.getNumParticles()
@@ -501,8 +525,8 @@ class HybridTopologyFactory(object):
                 # Add exclusions between unique parts of molecule1 and molecule2 so they do not interact.
                 print "Add exclusions between unique parts of molecule1 and molecule2 that should not interact..."
                 for atom1_i in unique1:
-                    for atom2_j in unique2:
-                        atom_i = molecule1_indices_in_system[atom1_i]
+                    for atom2_j in self.unique_atoms2:
+                        atom_i = atom1_i
                         atom_j = sys2_indices_in_system[atom2_j]
                         electrostatics_custom_nonbonded_force.addExclusion(atom_i, atom_j)
                         sterics_custom_nonbonded_force.addExclusion(atom_i, atom_j)
@@ -533,7 +557,7 @@ class HybridTopologyFactory(object):
                 # Copy over parameters for common substructure.
                 for atom1 in common1:
                     atom2 = mapping1[atom1] # index into system2
-                    index = molecule1_indices_in_system[atom1] # index into system
+                    index = atom1 # index into system
                     [charge1, sigma1, epsilon1] = force1.getParticleParameters(atom1)
                     [charge2, sigma2, epsilon2] = force2.getParticleParameters(atom2)
                     sterics_custom_nonbonded_force.setParticleParameters(index, [sigma1, epsilon1, sigma2, epsilon2])
@@ -541,13 +565,13 @@ class HybridTopologyFactory(object):
 
                 # Copy over parameters for molecule1 unique atoms.
                 for atom1 in unique1:
-                    index = molecule1_indices_in_system[atom1] # index into system
+                    index = atom1 # index into system
                     [charge1, sigma1, epsilon1] = force1.getParticleParameters(atom1)
                     sterics_custom_nonbonded_force.setParticleParameters(index, [sigma1, epsilon1, sigma1, 0*epsilon1])
                     electrostatics_custom_nonbonded_force.setParticleParameters(index, [charge1, 0*charge1])
 
                 # Copy over parameters for molecule2 unique atoms.
-                for atom2 in unique2:
+                for atom2 in self.unique_atoms2:
                     index = sys2_indices_in_system[atom2] # index into system
                     [charge2, sigma2, epsilon2] = force2.getParticleParameters(atom2)
                     sterics_custom_nonbonded_force.setParticleParameters(index, [sigma2, 0*epsilon2, sigma2, epsilon2])
