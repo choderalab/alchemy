@@ -191,7 +191,7 @@ class HybridTopologyFactory(object):
         #sys2_indices_in_system = sys2_indices_in_system.values()
 
         # Handle constraints.
-        print "Adding constraints from system2..."
+        print("Adding constraints from system2...")
         for index in range(system2.getNumConstraints()):
             # Extract constraint distance from system2.
             [atom2_i, atom2_j, distance] = system.getConstraintParameters(index)
@@ -223,7 +223,7 @@ class HybridTopologyFactory(object):
             force_name = force.__class__.__name__
             force1 = forces1[force_name]
             force2 = forces2[force_name]
-            print force_name
+            print(force_name)
             if force_name == 'HarmonicBondForce':
                 #
                 # Process HarmonicBondForce
@@ -243,12 +243,12 @@ class HybridTopologyFactory(object):
                 bonds2 = index_bonds(force2)  # index of bonds for system2
 
                 # Find bonds that are unique to each molecule.
-                print "Finding bonds unique to each molecule..."
+                print("Finding bonds unique to each molecule...")
                 unique_bonds1 = [ bonds1[atoms] for atoms in bonds1 if not set(atoms).issubset(common1) ]
                 unique_bonds2 = [ bonds2[atoms] for atoms in bonds2 if not set(atoms).issubset(common2) ]
  
                 # Build list of bonds shared among all molecules.
-                print "Building a list of shared bonds..."
+                print("Building a list of shared bonds...")
                 shared_bonds = list()
                 for atoms2 in bonds2:
                     atoms2 = list(atoms2)
@@ -263,7 +263,7 @@ class HybridTopologyFactory(object):
                         shared_bonds.append( (index, index1, index2) )
     
                 # Add bonds that are unique to molecule2.
-                print "Adding bonds unique to molecule2..."
+                print("Adding bonds unique to molecule2...")
                 for index2 in unique_bonds2:
                     [atom2_i, atom2_j, length2, K2] = force2.getBondParameters(index2)
                     atom_i = sys2_indices_in_system[atom2_i]
@@ -271,7 +271,7 @@ class HybridTopologyFactory(object):
                     force.addBond(atom_i, atom_j, length2, K2)
     
                 # Create a CustomBondForce to handle interpolated bond parameters.
-                print "Creating CustomBondForce..."
+                print("Creating CustomBondForce...")
                 energy_expression  = '(K/2)*(r-length)^2;'
                 energy_expression += 'K = (1-lambda)*K1 + lambda*K2;' # linearly interpolate spring constant
                 energy_expression += 'length = (1-lambda)*length1 + lambda*length2;' # linearly interpolate bond length
@@ -284,7 +284,7 @@ class HybridTopologyFactory(object):
                 system.addForce(custom_force)
     
                 # Process bonds that are shared by molecule1 and molecule2.
-                print "Translating shared bonds to CustomBondForce..."
+                print("Translating shared bonds to CustomBondForce...")
                 for (index, index1, index2) in shared_bonds:
                     # Zero out standard bond force.
                     [atom_i, atom_j, length, K] = force.getBondParameters(index)
@@ -313,12 +313,12 @@ class HybridTopologyFactory(object):
                 angles2 = index_angles(force2)  # index of angles for system2
 
                 # Find angles that are unique to each molecule.
-                print "Finding angles unique to each molecule..."
+                print("Finding angles unique to each molecule...")
                 unique_angles1 = [ angles1[atoms] for atoms in angles1 if not set(atoms).issubset(common1) ]
                 unique_angles2 = [ angles2[atoms] for atoms in angles2 if not set(atoms).issubset(common2) ]
 
                 # Build list of angles shared among all molecules.
-                print "Building a list of shared angles..."
+                print("Building a list of shared angles...")
                 shared_angles = list()
                 for atoms2 in angles2:
                     atoms2 = list(atoms2)
@@ -333,7 +333,7 @@ class HybridTopologyFactory(object):
                         shared_angles.append( (index, index1, index2) )
     
                 # Add angles that are unique to molecule2.
-                print "Adding angles unique to molecule2..."
+                print("Adding angles unique to molecule2...")
                 for index2 in unique_angles2:
                     [atom2_i, atom2_j, atom2_k, theta2, K2] = force2.getAngleParameters(index2)
                     atom_i = sys2_indices_in_system[atom2_i]
@@ -342,7 +342,7 @@ class HybridTopologyFactory(object):
                     force.addAngle(atom_i, atom_j, atom_k, theta2, K2)
 
                 # Create a CustomAngleForce to handle interpolated angle parameters.
-                print "Creating CustomAngleForce..."
+                print("Creating CustomAngleForce...")
                 energy_expression  = '(K/2)*(theta-theta0)^2;'
                 energy_expression += 'K = (1-lambda)*K_1 + lambda*K_2;' # linearly interpolate spring constant
                 energy_expression += 'theta0 = (1-lambda)*theta0_1 + lambda*theta0_2;' # linearly interpolate equilibrium angle
@@ -355,7 +355,7 @@ class HybridTopologyFactory(object):
                 system.addForce(custom_force)
     
                 # Process angles that are shared by molecule1 and molecule2.
-                print "Translating shared angles to CustomAngleForce..."
+                print("Translating shared angles to CustomAngleForce...")
                 for (index, index1, index2) in shared_angles:
                     # Zero out standard angle force.
                     [atom_i, atom_j, atom_k, theta0, K] = force.getAngleParameters(index)
@@ -387,12 +387,12 @@ class HybridTopologyFactory(object):
                 torsions2 = index_torsions(force2)  # index of torsions for system2
 
                 # Find torsions that are unique to each molecule.
-                print "Finding torsions unique to each molecule..."
+                print("Finding torsions unique to each molecule...")
                 unique_torsions1 = [ torsions1[atoms] for atoms in torsions1 if not set(atoms).issubset(common1) ]
                 unique_torsions2 = [ torsions2[atoms] for atoms in torsions2 if not set(atoms).issubset(common2) ]
  
                 # Build list of torsions shared among all molecules.
-                print "Building a list of shared torsions..."
+                print("Building a list of shared torsions...")
                 shared_torsions = list()
                 for atoms2 in torsions2:
                     atoms2 = list(atoms2)
@@ -415,9 +415,9 @@ class HybridTopologyFactory(object):
                             try:
                                 index1 = torsions1[unique(atoms1)]
                                 print("ERROR: torsion present in SYSTEM 1, not copied to SYSTEM.")
-                                print "torsions :  %s" % str(unique(atoms))
-                                print "torsions1:  %s" % str(unique(atoms1))
-                                print "torsions2:  %s" % str(unique(atoms2))
+                                print("torsions :  %s" % str(unique(atoms)))
+                                print("torsions1:  %s" % str(unique(atoms1)))
+                                print("torsions2:  %s" % str(unique(atoms2)))
                                 raise(e)
                             except:
                                 try:
@@ -427,25 +427,25 @@ class HybridTopologyFactory(object):
 #                                    print("ERROR: torsion present in SYSTEM 2 but not in SYSTEM 1.")
                                 except:
                                     print("ERROR: the torsion does not exist.")
-                                    print "torsions :  %s" % str(unique(atoms))
-                                    print "torsions1:  %s" % str(unique(atoms1))
-                                    print "torsions2:  %s" % str(unique(atoms2))
+                                    print("torsions :  %s" % str(unique(atoms)))
+                                    print("torsions1:  %s" % str(unique(atoms1)))
+                                    print("torsions2:  %s" % str(unique(atoms2)))
                                     raise(e)
                         try:
                             index1 = torsions1[unique(atoms1)]
                         except Exception as e:
                             print("Error occurred in building a list of torsions common to all molecules -- SYSTEM 1.")
-                            print "torsions :  %s" % str(unique(atoms))
-                            print "torsions1:  %s" % str(unique(atoms1))
-                            print "torsions2:  %s" % str(unique(atoms2))
+                            print("torsions :  %s" % str(unique(atoms)))
+                            print("torsions1:  %s" % str(unique(atoms1)))
+                            print("torsions2:  %s" % str(unique(atoms2)))
                             raise(e)
                         try:
                             index2 = torsions2[unique(atoms2)]
                         except Exception as e:
                             print("Error occurred in building a list of torsions common to all molecules -- SYSTEM 2.")
-                            print "torsions :  %s" % str(unique(atoms))
-                            print "torsions1:  %s" % str(unique(atoms1))
-                            print "torsions2:  %s" % str(unique(atoms2))
+                            print("torsions :  %s" % str(unique(atoms)))
+                            print("torsions1:  %s" % str(unique(atoms1)))
+                            print("torsions2:  %s" % str(unique(atoms2)))
                             raise(e)
 
 
@@ -453,7 +453,7 @@ class HybridTopologyFactory(object):
                         shared_torsions.append( (index, index1, index2) )
  
                 # Add torsions that are unique to molecule2.
-                print "Adding torsions unique to molecule2..."
+                print("Adding torsions unique to molecule2...")
                 for index2 in unique_torsions2:
                     [atom2_i, atom2_j, atom2_k, atom2_l, periodicity2, phase2, K2] = force2.getTorsionParameters(index2)
                     atom_i = sys2_indices_in_system[atom2_i]
@@ -463,7 +463,7 @@ class HybridTopologyFactory(object):
                     force.addTorsion(atom_i, atom_j, atom_k, atom_l, periodicity2, phase2, K2)
 
                 # Create a CustomTorsionForce to handle interpolated torsion parameters.
-                print "Creating CustomTorsionForce..."
+                print("Creating CustomTorsionForce...")
                 energy_expression  = '(1-lambda)*U1 + lambda*U2;'
                 energy_expression += 'U1 = K1*(1+cos(periodicity1*theta-phase1));'
                 energy_expression += 'U2 = K2*(1+cos(periodicity2*theta-phase2));'
@@ -478,7 +478,7 @@ class HybridTopologyFactory(object):
                 system.addForce(custom_force)
 
                 # Process torsions that are shared by molecule1 and molecule2.
-                print "Translating shared torsions to CustomTorsionForce..."
+                print("Translating shared torsions to CustomTorsionForce...")
                 for (index, index1, index2) in shared_torsions:
                     # Zero out standard torsion force.
                     [atom_i, atom_j, atom_k, atom_l, periodicity, phase, K] = force.getTorsionParameters(index)
@@ -521,12 +521,12 @@ class HybridTopologyFactory(object):
                 exceptions2 = index_exceptions(force2)  # index of exceptions for system2
 
                 # Find exceptions that are unique to each molecule.
-                print "Finding exceptions unique to each molecule..."
+                print("Finding exceptions unique to each molecule...")
                 unique_exceptions1 = [ exceptions1[atoms] for atoms in exceptions1 if not set(atoms).issubset(common1) ]
                 unique_exceptions2 = [ exceptions2[atoms] for atoms in exceptions2 if not set(atoms).issubset(common2) ]
 
                 # Build list of exceptions shared among all molecules.
-                print "Building a list of shared exceptions..."
+                print("Building a list of shared exceptions...")
                 shared_exceptions = list()
                 for atoms2 in exceptions2:
                     atoms2 = list(atoms2)
@@ -544,7 +544,7 @@ class HybridTopologyFactory(object):
                             pass 
 
                 # Add exceptions that are unique to molecule2.
-                print "Adding exceptions unique to molecule2..."
+                print("Adding exceptions unique to molecule2...")
                 for index2 in unique_exceptions2:
                     [atom2_i, atom2_j, chargeProd, sigma, epsilon] = force2.getExceptionParameters(index2)
                     atom_i = sys2_indices_in_system[atom2_i]
@@ -639,7 +639,7 @@ class HybridTopologyFactory(object):
                 electrostatics_custom_nonbonded_force.addInteractionGroup(atomset1, atomset2)
 
                 # Add exclusions between unique parts of molecule1 and molecule2 so they do not interact.
-                print "Add exclusions between unique parts of molecule1 and molecule2 that should not interact..."
+                print("Add exclusions between unique parts of molecule1 and molecule2 that should not interact...")
                 for atom1_i in unique1:
                     for atom2_j in self.unique_atoms2:
                         atom_i = atom1_i
