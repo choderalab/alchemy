@@ -33,6 +33,9 @@ class HybridTopologyFactory(object):
         self.softcore_beta=12*unit.angstrom**2
         self.system1 = system1
         self.system2 = system2
+
+        if topology1 == topology2:
+            raise(IOError("Hybrid Topology requires 2 different topologies; identical topologies given"))
         self.topology1 = topology1
         self.topology2 = topology2
 
