@@ -192,6 +192,9 @@ def test_relative_factory(top_proposal):
     print("Old topology chemical state key:")
     print(top_proposal.old_chemical_state_key)
 
+    if topology1 == topology2:
+        return
+
     alchemical_factory = relative.HybridTopologyFactory(system1, system2, topology1, topology2, positions1, positions2, atom_mapping_1to2)
     hybrid_system, hybrid_topology, hybrid_positions = alchemical_factory.createPerturbedSystem()
 
@@ -205,8 +208,9 @@ def test_relative_factory_small_molecule():
 
 
 if __name__ == "__main__":
-    test_relative_factory_point_mutation()
-    test_relative_factory_small_molecule()
+    for i in range(50):
+        test_relative_factory_point_mutation()
+        test_relative_factory_small_molecule()
 
 
 
