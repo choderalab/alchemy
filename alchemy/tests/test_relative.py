@@ -155,7 +155,7 @@ def test_small_molecule_proposals():
     initial_system, initial_positions, initial_topology = oemol_to_omm_ff(initial_molecule, "MOL")
     return proposal_engine.propose(initial_system, initial_topology)
 
-def test_relative_factory(top_proposal):
+def _relative_factory(top_proposal):
     system1 = top_proposal.old_system
     system2 = top_proposal.new_system
     topology1 = top_proposal.old_topology
@@ -200,11 +200,11 @@ def test_relative_factory(top_proposal):
 
 def test_relative_factory_point_mutation():
     top_proposal = test_run_point_mutation_propose()
-    test_relative_factory(top_proposal)
+    _relative_factory(top_proposal)
 
 def test_relative_factory_small_molecule():
     top_proposal = test_small_molecule_proposals()
-    test_relative_factory(top_proposal)
+    _relative_factory(top_proposal)
 
 
 if __name__ == "__main__":
