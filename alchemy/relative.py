@@ -1,8 +1,6 @@
 """
 Place holder
 """
-from openmoltools import openeye
-import openeye.oechem as oe
 import simtk.openmm as mm
 from simtk import unit
 import simtk.openmm.app as app
