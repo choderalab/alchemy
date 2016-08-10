@@ -544,8 +544,8 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
             except Exception as e:
                 logger.info(str(e))
                 logger.info('Could not create a trajectory cache (%s).' % cached_trajectory_filename)
-                pass
-
+                ncfile = None
+                
     # Collect simulation data.
     reference_context.setPositions(positions)
     du_n = np.zeros([nsamples], np.float64) # du_n[n] is the
