@@ -927,6 +927,7 @@ if __name__ == "__main__":
     #generate_trace(test_systems['TIP3P with reaction field, switch, dispersion correction'])
     config_root_logger(True)
 
+    logging.basicConfig(level=logging.INFO)
     test_waterbox()
     test_annihilated_states()
 
