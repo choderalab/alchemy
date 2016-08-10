@@ -159,7 +159,7 @@ def compute_energy(system, positions, platform=None, precision=None):
     del context, integrator, state
     return potential
 
-def check_waterbox(platform=None, precision=None):
+def check_waterbox(platform=None, precision=None, nonbondedMethod=openmm.NonbondedForce.CutoffPeriodic):
     """Compare annihilated states in vacuum and a large box.
     """
     platform_name = platform.getName()
@@ -171,11 +171,7 @@ def check_waterbox(platform=None, precision=None):
     # Use reaction field
     for force in system.getForces():
         if force.__class__.__name__ == 'NonbondedForce':
-            force.setNonbondedMethod(openmm.NonbondedForce.CutoffPeriodic)
-            #force.setNonbondedMethod(openmm.NonbondedForce.PME)
-            #force.setCutoffDistance(9.0 * unit.angstroms)
-            #force.setUseDispersionCorrection(False)
-            #force.setReactionFieldDielectric(1.0)
+            force.setNonbondedMethod(nonbondedMethod)
 
     factory_args = {'ligand_atoms' : [], 'receptor_atoms' : [],
         'annihilate_sterics' : False, 'annihilate_electrostatics' : True }
@@ -208,9 +204,10 @@ def check_waterbox(platform=None, precision=None):
 
 def test_waterbox():
     for platform_index in range(openmm.Platform.getNumPlatforms()):
-        platform = openmm.Platform.getPlatform(platform_index)
-        f = partial(check_waterbox, platform=platform)
-        yield f
+        for nonbondedMethod in [openmm.NonbondedForce.PME, openmm.NonbondedForce.CutoffPeriodic]:
+            platform = openmm.Platform.getPlatform(platform_index)
+            f = partial(check_waterbox, platform=platform, nonbondedMethod=nonbondedMethod)
+            yield f
 
 def compare_platforms(system, positions, factory_args=dict()):
     # Create annihilated version of vacuum system.
@@ -545,7 +542,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
                 logger.info(str(e))
                 logger.info('Could not create a trajectory cache (%s).' % cached_trajectory_filename)
                 ncfile = None
-                
+
     # Collect simulation data.
     reference_context.setPositions(positions)
     du_n = np.zeros([nsamples], np.float64) # du_n[n] is the
