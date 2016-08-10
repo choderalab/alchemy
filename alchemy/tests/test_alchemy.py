@@ -516,6 +516,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
         reference_context = openmm.Context(reference_system, reference_integrator)
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator)
 
+    ncfile = None
     if cached_trajectory_filename:
         cache_mode = 'write'
 
@@ -532,13 +533,18 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
 
         if cache_mode == 'write':
             # If anything went wrong, create a new cache.
-            (pathname, filename) = os.path.split(cached_trajectory_filename)
-            if not os.path.exists(pathname): os.makedirs(pathname)
-            ncfile = Dataset(cached_trajectory_filename, 'w', format='NETCDF4')
-            ncfile.createDimension('samples', 0)
-            ncfile.createDimension('atoms', reference_system.getNumParticles())
-            ncfile.createDimension('spatial', 3)
-            ncfile.createVariable('positions', 'f4', ('samples', 'atoms', 'spatial'))
+            try:
+                (pathname, filename) = os.path.split(cached_trajectory_filename)
+                if not os.path.exists(pathname): os.makedirs(pathname)
+                ncfile = Dataset(cached_trajectory_filename, 'w', format='NETCDF4')
+                ncfile.createDimension('samples', 0)
+                ncfile.createDimension('atoms', reference_system.getNumParticles())
+                ncfile.createDimension('spatial', 3)
+                ncfile.createVariable('positions', 'f4', ('samples', 'atoms', 'spatial'))
+            except Exception as e:
+                logger.info(str(e))
+                logger.info('Could not create a trajectory cache (%s).' % cached_trajectory_filename)
+                pass
 
     # Collect simulation data.
     reference_context.setPositions(positions)
@@ -570,7 +576,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
 
             du_n[sample] = (alchemical_potential - reference_potential) / kT
 
-            if cached_trajectory_filename and (cache_mode == 'write'):
+            if cached_trajectory_filename and (cache_mode == 'write') and (ncfile is not None):
                 ncfile.variables['positions'][sample,:,:] = reference_state.getPositions(asNumpy=True) / unit.nanometers
 
     # Clean up.
