@@ -180,7 +180,7 @@ def check_waterbox(platform=None, precision=None):
     factory_args = {'ligand_atoms' : [], 'receptor_atoms' : [],
         'annihilate_sterics' : False, 'annihilate_electrostatics' : True }
 
-    # Create annihilated version of vacuum system.
+    # Create alchemically-modified system
     factory = AbsoluteAlchemicalFactory(system, **factory_args)
     alchemical_system = factory.createPerturbedSystem()
 
@@ -211,6 +211,37 @@ def test_waterbox():
         platform = openmm.Platform.getPlatform(platform_index)
         f = partial(check_waterbox, platform=platform)
         yield f
+
+def compare_platforms(system, positions, factory_args=dict()):
+    # Create annihilated version of vacuum system.
+    factory = AbsoluteAlchemicalFactory(system, **factory_args)
+    alchemical_system = factory.createPerturbedSystem()
+
+    def set_lambda(alchemical_system, lambda_value):
+        alchemical_state = AlchemicalState(lambda_coulomb=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
+        AbsoluteAlchemicalFactory.perturbSystem(alchemical_system, alchemical_state)
+
+    # Compare energies
+    energies = dict()
+    platform_names = list()
+    for platform_index in range(openmm.Platform.getNumPlatforms()):
+        platform = openmm.Platform.getPlatform(platform_index)
+        platform_name = platform.getName()
+        if platform_name != 'Reference':
+            platform_names.append(platform_name)
+        energies[platform_name] = dict()
+        energies[platform_name]['full'] = compute_energy(system, positions, platform=platform)
+        set_lambda(alchemical_system, 1.0)
+        energies[platform_name]['lambda = 1'] = compute_energy(alchemical_system, positions, platform=platform)
+        set_lambda(alchemical_system, 0.0)
+        energies[platform_name]['lambda = 0'] = compute_energy(alchemical_system, positions, platform=platform)
+
+    # Check deviations.
+    for platform_name in platform_names:
+        for energy_name in ['full', 'lambda = 1', 'lambda = 0']:
+            delta = energies[platform_name][energy_name] - energies['Reference'][energy_name]
+            if (abs(delta) > MAX_DELTA):
+                raise Exception("Maximum allowable deviation on platform %s exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (platform_name, delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
 def test_annihilated_states(platform_name=None, precision=None):
     """Compare annihilated states in vacuum and a large box.
@@ -859,8 +890,6 @@ def test_overlap():
         f.description = "Testing reference/alchemical overlap for %s..." % name
         yield f
 
-    return
-
 def test_alchemical_accuracy():
     """
     Generate nose tests for overlap for all alchemical test systems.
@@ -874,7 +903,18 @@ def test_alchemical_accuracy():
         f.description = "Testing alchemical fidelity of %s..." % name
         yield f
 
-    return
+def test_alchemical_accuracy():
+    """
+    Generate nose tests for overlap for all alchemical test systems.
+    """
+    for name in accuracy_testsystem_names:
+        test_system = test_systems[name]
+        reference_system = test_system['test'].system
+        positions = test_system['test'].positions
+        factory_args = test_system['factory_args']
+        f = partial(compare_platforms, reference_system, positions, factory_args=factory_args)
+        f.description = "Comparing platforms for alchemically-modified forms of %s..." % name
+        yield f
 
 #=============================================================================================
 # MAIN FOR MANUAL DEBUGGING
