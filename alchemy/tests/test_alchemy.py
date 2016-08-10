@@ -146,6 +146,131 @@ def dump_xml(system=None, integrator=None, state=None):
     if state: write_file('state.xml', XmlSerializer.serialize(state))
     return
 
+def compute_energy(system, positions, platform=None, precision=None):
+    timestep = 1.0 * unit.femtoseconds
+    integrator = openmm.VerletIntegrator(timestep)
+    if platform:
+        context = openmm.Context(system, integrator, platform)
+    else:
+        context = openmm.Context(system, integrator)
+    context.setPositions(positions)
+    state = context.getState(getEnergy=True)
+    potential = state.getPotentialEnergy()
+    del context, integrator, state
+    return potential
+
+def check_waterbox(platform=None, precision=None):
+    """Compare annihilated states in vacuum and a large box.
+    """
+    platform_name = platform.getName()
+    from openmmtools import testsystems
+    testsystem = testsystems.WaterBox()
+    system = testsystem.system
+    positions = testsystem.positions
+
+    # Use reaction field
+    for force in system.getForces():
+        if force.__class__.__name__ == 'NonbondedForce':
+            force.setNonbondedMethod(openmm.NonbondedForce.CutoffPeriodic)
+            #force.setNonbondedMethod(openmm.NonbondedForce.PME)
+            #force.setCutoffDistance(9.0 * unit.angstroms)
+            #force.setUseDispersionCorrection(False)
+            #force.setReactionFieldDielectric(1.0)
+
+    factory_args = {'ligand_atoms' : [], 'receptor_atoms' : [],
+        'annihilate_sterics' : False, 'annihilate_electrostatics' : True }
+
+    # Create annihilated version of vacuum system.
+    factory = AbsoluteAlchemicalFactory(system, **factory_args)
+    alchemical_system = factory.createPerturbedSystem()
+
+    # Compare energies
+    system_energy = compute_energy(system, positions, platform=platform, precision=precision)
+    alchemical_1_energy = compute_energy(alchemical_system, positions, platform=platform, precision=precision)
+
+    # Set lambda = 0
+    lambda_value = 0.0
+    alchemical_state = AlchemicalState(lambda_coulomb=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
+    AbsoluteAlchemicalFactory.perturbSystem(alchemical_system, alchemical_state)
+    alchemical_0_energy = compute_energy(alchemical_system, positions, platform=platform, precision=precision)
+
+    # Check deviation.
+    logger.info("========")
+    logger.info("Platform %s" % platform_name)
+    logger.info("Alchemically-modified WaterBox with no alchemical atoms")
+    logger.info('real system : %8.3f kcal/mol' % (system_energy / unit.kilocalories_per_mole))
+    logger.info('lambda = 1  : %8.3f kcal/mol' % (alchemical_1_energy / unit.kilocalories_per_mole))
+    logger.info('lambda = 0  : %8.3f kcal/mol' % (alchemical_0_energy / unit.kilocalories_per_mole))
+    delta = alchemical_1_energy - alchemical_0_energy
+    logger.info("ERROR       : %8.3f kcal/mol" % (delta / unit.kilocalories_per_mole))
+    if (abs(delta) > MAX_DELTA):
+        raise Exception("Maximum allowable deviation on platform %s exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (platform_name, delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
+
+def test_waterbox():
+    for platform_index in range(openmm.Platform.getNumPlatforms()):
+        platform = openmm.Platform.getPlatform(platform_index)
+        f = partial(check_waterbox, platform=platform)
+        yield f
+
+def test_annihilated_states(platform_name=None, precision=None):
+    """Compare annihilated states in vacuum and a large box.
+    """
+    from openmmtools import testsystems
+    testsystem = testsystems.TolueneVacuum()
+    vacuum_system = testsystem.system
+    positions = testsystem.positions
+
+    factory_args = {'ligand_atoms' : range(0,15), 'receptor_atoms' : [],
+        'annihilate_sterics' : False, 'annihilate_electrostatics' : True }
+
+    # Create annihilated version of vacuum system.
+    factory = AbsoluteAlchemicalFactory(vacuum_system, **factory_args)
+    vacuum_alchemical_system = factory.createPerturbedSystem()
+
+    # Make copy of system that has periodic boundaries and uses reaction field.
+    periodic_system = copy.deepcopy(vacuum_system)
+    box_edge = 18.5 * unit.angstroms
+    from simtk.openmm import Vec3
+    periodic_system.setDefaultPeriodicBoxVectors(Vec3(box_edge,0,0), Vec3(0,box_edge,0), Vec3(0,0,box_edge))
+    for force in periodic_system.getForces():
+        if force.__class__.__name__ == 'NonbondedForce':
+            force.setNonbondedMethod(openmm.NonbondedForce.CutoffPeriodic)
+            force.setCutoffDistance(9.0 * unit.angstroms)
+            force.setUseDispersionCorrection(False)
+            force.setReactionFieldDielectric(1.0)
+    factory = AbsoluteAlchemicalFactory(periodic_system, **factory_args)
+    periodic_alchemical_system = factory.createPerturbedSystem()
+
+    # Compare energies
+    platform = None
+    if platform_name:
+        platform = openmm.Platform.getPlatformByName(platform_name)
+
+    vacuum_alchemical_1_energy = compute_energy(vacuum_alchemical_system, positions, platform=platform, precision=precision)
+    periodic_alchemical_1_energy = compute_energy(periodic_alchemical_system, positions, platform=platform, precision=precision)
+
+    #compareSystemEnergies(positions, [vacuum_alchemical_system, periodic_alchemical_system], ['vacuum (fully interacting)', 'periodic (fully interacting)'], platform=platform, precision=precision)
+
+    # Set lambda = 0
+    lambda_value = 0.0
+    alchemical_state = AlchemicalState(lambda_coulomb=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
+    AbsoluteAlchemicalFactory.perturbSystem(vacuum_alchemical_system, alchemical_state)
+    AbsoluteAlchemicalFactory.perturbSystem(periodic_alchemical_system, alchemical_state)
+
+    #compareSystemEnergies(positions, [vacuum_alchemical_system, periodic_alchemical_system], ['vacuum (noninteracting)', 'periodic (noninteracting)'], platform=platform, precision=precision)
+
+    vacuum_alchemical_0_energy = compute_energy(vacuum_alchemical_system, positions, platform=platform, precision=precision)
+    periodic_alchemical_0_energy = compute_energy(periodic_alchemical_system, positions, platform=platform, precision=precision)
+
+    logger.info('vacuum   lambda = 1 : %8.3f kcal/mol' % (vacuum_alchemical_1_energy / unit.kilocalories_per_mole))
+    logger.info('vacuum   lambda = 0 : %8.3f kcal/mol' % (vacuum_alchemical_0_energy / unit.kilocalories_per_mole))
+    logger.info('difference          : %8.3f kcal/mol' % ((vacuum_alchemical_1_energy - vacuum_alchemical_0_energy) / unit.kilocalories_per_mole))
+
+    logger.info('periodic lambda = 1 : %8.3f kcal/mol' % (periodic_alchemical_1_energy / unit.kilocalories_per_mole))
+    logger.info('periodic lambda = 0 : %8.3f kcal/mol' % (periodic_alchemical_0_energy / unit.kilocalories_per_mole))
+    logger.info('difference          : %8.3f kcal/mol' % ((periodic_alchemical_1_energy - periodic_alchemical_0_energy) / unit.kilocalories_per_mole))
+
+
 def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
     # Compare energies.
     timestep = 1.0 * unit.femtosecond
@@ -584,9 +709,15 @@ test_systems['TIP3P with reaction field, switch, no dispersion correction'] = {
 test_systems['TIP3P with reaction field, no switch, dispersion correction'] = {
     'test' : testsystems.WaterBox(dispersion_correction=True, switch=False, nonbondedMethod=app.CutoffPeriodic),
     'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }}
+test_systems['TIP3P with reaction field, no switch, dispersion correction, no alchemical atoms'] = {
+    'test' : testsystems.WaterBox(dispersion_correction=True, switch=False, nonbondedMethod=app.CutoffPeriodic),
+    'factory_args' : {'ligand_atoms' : [], 'receptor_atoms' : [] }}
 test_systems['TIP3P with reaction field, switch, dispersion correction'] = {
     'test' : testsystems.WaterBox(dispersion_correction=True, switch=True, nonbondedMethod=app.CutoffPeriodic),
     'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }}
+test_systems['TIP3P with reaction field, switch, dispersion correction, no alchemical atoms'] = {
+    'test' : testsystems.WaterBox(dispersion_correction=True, switch=True, nonbondedMethod=app.CutoffPeriodic),
+    'factory_args' : {'ligand_atoms' : [], 'receptor_atoms' : [] }}
 test_systems['TIP3P with reaction field, switch, dispersion correctionm, electrostatics scaling followed by softcore Lennard-Jones'] = {
     'test' : testsystems.WaterBox(dispersion_correction=True, switch=True, nonbondedMethod=app.CutoffPeriodic),
     'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6), 'softcore_beta' : 0.0, 'alchemical_functions' : { 'lambda_sterics' : '2*lambda * step(0.5 - lambda)', 'lambda_electrostatics' : '2*(lambda - 0.5) * step(lambda - 0.5)' }}}
@@ -635,6 +766,9 @@ test_systems['Src in GBSA, with Src sterics annihilated'] = {
 test_systems['TIP3P with PME, no switch, no dispersion correction'] = {
     'test' : testsystems.WaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.PME),
     'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }}
+test_systems['TIP3P with PME, no switch, no dispersion correction, no alchemical atoms'] = {
+    'test' : testsystems.WaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.PME),
+    'factory_args' : {'ligand_atoms' : [], 'receptor_atoms' : [] }}
 
 test_systems['toluene in implicit solvent'] = {
     'test' : testsystems.TolueneImplicit(),
@@ -749,6 +883,9 @@ def test_alchemical_accuracy():
 if __name__ == "__main__":
     #generate_trace(test_systems['TIP3P with reaction field, switch, dispersion correction'])
     config_root_logger(True)
+
+    test_waterbox()
+    test_annihilated_states()
 
     #name = 'Lennard-Jones fluid with dispersion correction'
     #name = 'Src in GBSA, with Src sterics annihilated'
