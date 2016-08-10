@@ -578,7 +578,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
 
     # Clean up.
     del reference_context, alchemical_context
-    if cached_trajectory_filename:
+    if cached_trajectory_filename and (ncfile is not None):
         ncfile.close()
 
     # Discard data to equilibration and subsample.
