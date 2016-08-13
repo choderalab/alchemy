@@ -186,7 +186,7 @@ def check_waterbox(platform=None, precision=None, nonbondedMethod=openmm.Nonbond
 
     # Set lambda = 0
     lambda_value = 0.0
-    alchemical_state = AlchemicalState(lambda_coulomb=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
+    alchemical_state = AlchemicalState(lambda_electrostatics=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
     AbsoluteAlchemicalFactory.perturbSystem(alchemical_system, alchemical_state)
     alchemical_0_energy = compute_energy(alchemical_system, positions, platform=platform, precision=precision)
 
@@ -215,7 +215,7 @@ def compare_platforms(system, positions, factory_args=dict()):
     alchemical_system = factory.createPerturbedSystem()
 
     def set_lambda(alchemical_system, lambda_value):
-        alchemical_state = AlchemicalState(lambda_coulomb=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
+        alchemical_state = AlchemicalState(lambda_electrostatics=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
         AbsoluteAlchemicalFactory.perturbSystem(alchemical_system, alchemical_state)
 
     # Compare energies
@@ -281,7 +281,7 @@ def test_annihilated_states(platform_name=None, precision=None):
 
     # Set lambda = 0
     lambda_value = 0.0
-    alchemical_state = AlchemicalState(lambda_coulomb=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
+    alchemical_state = AlchemicalState(lambda_electrostatics=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
     AbsoluteAlchemicalFactory.perturbSystem(vacuum_alchemical_system, alchemical_state)
     AbsoluteAlchemicalFactory.perturbSystem(periodic_alchemical_system, alchemical_state)
 
@@ -403,7 +403,7 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     # Create an alchemically-perturbed state corresponding to nearly fully-interacting.
     # NOTE: We use a lambda slightly smaller than 1.0 because the AlchemicalFactory does not use Custom*Force softcore versions if lambda = 1.0 identically.
     lambda_value = 1.0 - 1.0e-6
-    alchemical_state = AlchemicalState(lambda_coulomb=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
+    alchemical_state = AlchemicalState(lambda_electrostatics=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value)
 
     platform = None
     if platform_name:
@@ -689,7 +689,7 @@ def lambda_trace(reference_system, positions, platform_name=None, precision=None
     u_i = unit.Quantity(np.zeros([nsteps+1], np.float64), unit.kilocalories_per_mole) # u_i[i] is the potential energy for lambda_i[i]
     for i in range(nsteps+1):
         lambda_value = 1.0-i*delta # compute lambda value for this step
-        alchemical_system = factory.createPerturbedSystem(AlchemicalState(lambda_coulomb=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value))
+        alchemical_system = factory.createPerturbedSystem(AlchemicalState(lambda_electrostatics=lambda_value, lambda_sterics=lambda_value, lambda_torsions=lambda_value))
         lambda_i[i] = lambda_value
         u_i[i] = compute_potential(alchemical_system, positions, platform)
         logger.info("%12.9f %24.8f kcal/mol" % (lambda_i[i], u_i[i] / unit.kilocalories_per_mole))
