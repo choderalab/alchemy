@@ -928,8 +928,9 @@ if __name__ == "__main__":
     config_root_logger(True)
 
     logging.basicConfig(level=logging.INFO)
-    test_waterbox()
+    #test_waterbox()
     test_annihilated_states()
+
 
     #name = 'Lennard-Jones fluid with dispersion correction'
     #name = 'Src in GBSA, with Src sterics annihilated'
