@@ -298,7 +298,7 @@ def test_annihilated_states(platform_name=None, precision=None):
     logger.info('periodic lambda = 0 : %8.3f kcal/mol' % (periodic_alchemical_0_energy / unit.kilocalories_per_mole))
     logger.info('difference          : %8.3f kcal/mol' % ((periodic_alchemical_1_energy - periodic_alchemical_0_energy) / unit.kilocalories_per_mole))
 
-    delta = (periodic_alchemical_1_energy - periodic_alchemical_0_energy)
+    delta = (vacuum_alchemical_1_energy - vacuum_alchemical_0_energy) - (periodic_alchemical_1_energy - periodic_alchemical_0_energy)
     if (abs(delta) > MAX_DELTA):
         raise Exception("Maximum allowable difference lambda=1 energy and lambda=0 energy in vacuum and periodic box exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
