@@ -14,12 +14,12 @@ requirements:
     - python
     - setuptools
     - numpy
-    - openmm-dev
+    - openmm
 
   run:
     - python
     - numpy
-    - openmm-dev
+    - openmm
 
 test:
   requires:
@@ -27,8 +27,8 @@ test:
     - nose-timer
     - click
     - netcdf4
-    - pymbar-dev
-    - openmmtools-dev
+    - pymbar
+    - openmmtools
 
   imports:
     - alchemy
