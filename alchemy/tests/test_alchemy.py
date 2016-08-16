@@ -262,7 +262,7 @@ def test_annihilated_states(platform_name=None, precision=None):
     periodic_system.setDefaultPeriodicBoxVectors(Vec3(box_edge,0,0), Vec3(0,box_edge,0), Vec3(0,0,box_edge))
     for force in periodic_system.getForces():
         if force.__class__.__name__ == 'NonbondedForce':
-            force.setNonbondedMethod(openmm.NonbondedForce.CutoffPeriodic)
+            force.setNonbondedMethod(openmm.NonbondedForce.PME)
             force.setCutoffDistance(9.0 * unit.angstroms)
             force.setUseDispersionCorrection(False)
             force.setReactionFieldDielectric(1.0)
@@ -298,6 +298,9 @@ def test_annihilated_states(platform_name=None, precision=None):
     logger.info('periodic lambda = 0 : %8.3f kcal/mol' % (periodic_alchemical_0_energy / unit.kilocalories_per_mole))
     logger.info('difference          : %8.3f kcal/mol' % ((periodic_alchemical_1_energy - periodic_alchemical_0_energy) / unit.kilocalories_per_mole))
 
+    delta = (periodic_alchemical_1_energy - periodic_alchemical_0_energy)
+    if (abs(delta) > MAX_DELTA):
+        raise Exception("Maximum allowable difference lambda=1 energy and lambda=0 energy in vacuum and periodic box exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
 def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
     # Compare energies.
