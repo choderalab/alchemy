@@ -240,8 +240,8 @@ def compare_platforms(system, positions, factory_args=dict()):
             if (abs(delta) > MAX_DELTA):
                 raise Exception("Maximum allowable deviation on platform %s exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (platform_name, delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
-def test_annihilated_states(platform_name=None, precision=None):
-    """Compare annihilated states in vacuum and a large box.
+def test_denihilated_states(platform_name=None, precision=None):
+    """Compare annihilated electrostatics / decoupled sterics states in vacuum and a large box.
     """
     from openmmtools import testsystems
     testsystem = testsystems.TolueneVacuum()
@@ -302,6 +302,39 @@ def test_annihilated_states(platform_name=None, precision=None):
     if (abs(delta) > MAX_DELTA):
         raise Exception("Maximum allowable difference lambda=1 energy and lambda=0 energy in vacuum and periodic box exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
+def check_noninteracting_energy_components(factory, positions):
+    """Check noninteracting energy components are zero when appropriate.
+
+    Parameters
+    ----------
+    factory : AbsoluteAlchemicalFactory
+        The factory to test.
+    positions : simtk.openmm.unit.Quantity of dimension [nparticles,3] with units compatible with Angstroms
+        The positions to test.
+
+    """
+    alchemical_state = factory.NoninteractingAlchemicalState()
+    energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=True)
+    energy_unit = unit.kilojoule_per_mole
+
+    def assert_zero_energy(label):
+        value = energy_components[label]
+        assert abs(value / energy_unit) == 0.0, "''%s' should have zero energy in annihilated alchemical state, but energy is %s" % (label, str(value))
+
+    if factory.annihilate_sterics:
+        # Check that alchemical sterics have been annihilated
+        assert_zero_energy('alchemically modified NonbondedForce for sterics')
+        assert_zero_energy('alchemically modified NonbondedForce for sterics exceptions')
+    if factory.annihilate_electrostatics:
+        # Check that alchemical electrostatics have been annihilated
+        assert_zero_energy('alchemically modified NonbondedForce for electrostatics')
+        assert_zero_energy('alchemically modified NonbondedForce for electrostatics exceptions')
+    # Check valence terms
+    for force_name in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce', 'GBSAOBCForce']:
+        force_label = 'alchemically modified ' + force_name
+        if force_label in energy_components:
+            assert_zero_energy(force_label)
+            
 def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
     # Compare energies.
     timestep = 1.0 * unit.femtosecond
@@ -371,7 +404,13 @@ def alchemical_factory_check(reference_system, positions, platform_name=None, pr
     if platform_name:
         platform = openmm.Platform.getPlatformByName(platform_name)
     alchemical_system = factory.createPerturbedSystem()
+
+    # Compare energies for fully-interacting system
     compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
+
+    # Check energies for noninteracting system.
+    check_noninteracting_energy_components(factory, positions)
+
     return
 
 def benchmark(reference_system, positions, platform_name=None, nsteps=500, timestep=1.0*unit.femtoseconds, factory_args=None):
