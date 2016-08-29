@@ -931,7 +931,7 @@ def test_alchemical_functions():
 
 def test_softcore_parameters():
     """
-    Testing alchemical slave functions
+    Testing softcore parameters
     """
     alchemical_functions = { 'lambda_sterics' : 'lambda', 'lambda_electrostatics' : 'lambda', 'lambda_bonds' : 'lambda', 'lambda_angles' : 'lambda', 'lambda_torsions' : 'lambda' }
     name = 'Lennard-Jones fluid with dispersion correction'
