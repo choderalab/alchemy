@@ -203,10 +203,15 @@ def check_waterbox(platform=None, precision=None, nonbondedMethod=openmm.Nonbond
         raise Exception("Maximum allowable deviation on platform %s exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (platform_name, delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
 def test_waterbox():
+    """Compare annihilated states in vacuum and a large box.
+    """
     for platform_index in range(openmm.Platform.getNumPlatforms()):
         for nonbondedMethod in [openmm.NonbondedForce.PME, openmm.NonbondedForce.CutoffPeriodic]:
             platform = openmm.Platform.getPlatform(platform_index)
             f = partial(check_waterbox, platform=platform, nonbondedMethod=nonbondedMethod)
+            platform_name = platform.getName()
+            nonbondedMethod_name = 'PME' if (nonbondedMethod == openmm.NonbondedForce.PME) else 'CutoffPeriodic'
+            f.description = 'Comparing waterbox annihilated states for platform %s and nonbondedMethod %s' % (platform_name, nonbondedMethod_name)
             yield f
 
 def compare_platforms(system, positions, factory_args=dict()):
@@ -316,8 +321,10 @@ def check_noninteracting_energy_components(factory, positions):
     alchemical_state = factory.NoninteractingAlchemicalState()
     energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=True)
     energy_unit = unit.kilojoule_per_mole
+    print(energy_components)
 
     def assert_zero_energy(label):
+        print('testing %s' % label)
         value = energy_components[label]
         assert abs(value / energy_unit) == 0.0, "''%s' should have zero energy in annihilated alchemical state, but energy is %s" % (label, str(value))
 
@@ -334,7 +341,7 @@ def check_noninteracting_energy_components(factory, positions):
         force_label = 'alchemically modified ' + force_name
         if force_label in energy_components:
             assert_zero_energy(force_label)
-            
+
 def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
     # Compare energies.
     timestep = 1.0 * unit.femtosecond
@@ -406,9 +413,11 @@ def alchemical_factory_check(reference_system, positions, platform_name=None, pr
     alchemical_system = factory.createPerturbedSystem()
 
     # Compare energies for fully-interacting system
+    print('compare system energies...')
     compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
 
     # Check energies for noninteracting system.
+    print('check noninteracting energy components...')
     check_noninteracting_energy_components(factory, positions)
 
     return
@@ -763,7 +772,49 @@ def generate_trace(test_system):
 # TEST SYSTEM DEFINITIONS
 #=============================================================================================
 
+accuracy_testsystem_names = [
+    'Lennard-Jones cluster',
+    'Lennard-Jones fluid without dispersion correction',
+    'Lennard-Jones fluid with dispersion correction',
+    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
+    'TIP3P with reaction field, switch, no dispersion correction',
+    'TIP3P with reaction field, switch, dispersion correction',
+    'alanine dipeptide in vacuum with annihilated sterics',
+    'toluene in implicit solvent',
+]
+
+overlap_testsystem_names = [
+    'Lennard-Jones cluster',
+    'Lennard-Jones fluid without dispersion correction',
+    'Lennard-Jones fluid with dispersion correction',
+    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
+    'TIP3P with reaction field, switch, no dispersion correction',
+    'TIP3P with reaction field, switch, dispersion correction',
+    'alanine dipeptide in vacuum with annihilated sterics',
+    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
+    'toluene in implicit solvent',
+]
+
+# DEBUG
+accuracy_testsystem_names = list()
+overlap_testsystem_names = list()
+
 test_systems = dict()
+
+# Generate host-guest test systems combinatorially.
+for nonbonded_method in [openmm.NonbondedForce.CutoffPeriodic, openmm.NonbondedForce.PME]:
+    nonbonded_treatment = 'CutoffPeriodic' if (nonbonded_method == openmm.NonbondedForce.CutoffPeriodic) else 'PME'
+    for annihilate_sterics in [False, True]:
+        sterics_treatment = 'annihilated' if annihilate_sterics else 'decoupled'
+        for annihilate_electrostatics in [False, True]:
+            electrostatics_treatment = 'annihilated' if annihilate_electrostatics else 'decoupled'
+            name = 'host-guest system in explicit solvent with %s using %s sterics and %s electrostatics' % (nonbonded_treatment, sterics_treatment, electrostatics_treatment)
+            test_systems[name] = {
+                'test' : testsystems.HostGuestExplicit(),
+                'factory_args' : {'ligand_atoms' : range(126, 156), 'receptor_atoms' : range(0, 126),
+                'annihilate_sterics' : annihilate_sterics, 'annihilate_electrostatics' : annihilate_electrostatics }}
+            accuracy_testsystem_names.append(name)
+
 test_systems['Lennard-Jones cluster'] = {
     'test' : testsystems.LennardJonesCluster(),
     'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }}
@@ -859,29 +910,6 @@ test_systems['toluene in implicit solvent'] = {
 #    'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
 #    'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,4091) }
 
-accuracy_testsystem_names = [
-    'Lennard-Jones cluster',
-    'Lennard-Jones fluid without dispersion correction',
-    'Lennard-Jones fluid with dispersion correction',
-    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
-    'TIP3P with reaction field, switch, no dispersion correction',
-    'TIP3P with reaction field, switch, dispersion correction',
-    'alanine dipeptide in vacuum with annihilated sterics',
-    'toluene in implicit solvent',
-]
-
-overlap_testsystem_names = [
-    'Lennard-Jones cluster',
-    'Lennard-Jones fluid without dispersion correction',
-    'Lennard-Jones fluid with dispersion correction',
-    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
-    'TIP3P with reaction field, switch, no dispersion correction',
-    'TIP3P with reaction field, switch, dispersion correction',
-    'alanine dipeptide in vacuum with annihilated sterics',
-    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
-    'toluene in implicit solvent',
-]
-
 #=============================================================================================
 # Test various options to AbsoluteAlchemicalFactory
 #=============================================================================================
@@ -948,9 +976,9 @@ def test_alchemical_accuracy():
         f.description = "Testing alchemical fidelity of %s..." % name
         yield f
 
-def test_alchemical_accuracy():
+def test_platforms():
     """
-    Generate nose tests for overlap for all alchemical test systems.
+    Generate nosetests for comparing platform energies...
     """
     for name in accuracy_testsystem_names:
         test_system = test_systems[name]

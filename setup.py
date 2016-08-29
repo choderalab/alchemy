@@ -79,7 +79,7 @@ setup(name='alchemy',
       zip_safe=False,
       ext_modules=extensions,
       install_requires=[
-        'openmm >=7.0.1',
+        'openmm',
         'numpy',
         ],
       )
