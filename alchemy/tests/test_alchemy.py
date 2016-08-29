@@ -318,9 +318,90 @@ def check_interacting_energy_components(factory, positions):
         The positions to test.
 
     """
-    # TODO: Compare total energies for each category with original fully-interacting system.
+    alchemical_state = factory.NoninteractingAlchemicalState()
+    energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=False)
+    energy_unit = unit.kilojoule_per_mole
 
-    pass
+    # Mapping between standard reference system and alchemical system forces to be summed to match
+    force_component_match = {
+        'HarmonicBondForce' : ['unmodified HarmonicBondForce', 'alchemically modified HarmonicBondForce'],
+        'HarmonicAngleForce' : ['unmodified HarmonicAngleForce', 'alchemically modified HarmonicAngleForce'],
+        'PeriodicTorsionForce' : ['unmodified PeriodicTorsionForce', 'alchemically modified PeriodicTorsionForce'],
+    }
+
+    import copy
+    reference_system = copy.deepcopy(factory.reference_system)
+    alchemical_system = copy.deepcopy(factory.alchemically_modified_system)
+
+    energy_unit = unit.kilocalories_per_mole
+
+    def compute_energy(system, positions):
+        timestep = 1.0 * unit.femtoseconds
+        integrator = openmm.VerletIntegrator(timestep)
+        context = openmm.Context(system, integrator)
+        context.setPositions(positions)
+        potential = context.getState(getEnergy=True).getPotentialEnergy() / energy_unit
+        del context, integrator
+        return potential
+
+    # Compute energy component decomposition of standard system NonbondedForce
+    system = copy.deepcopy(factory.reference_system)
+    # Sterics (nonbonded plus exceptions)
+    forces_to_remove = list()
+    # Remove all forces but NonbondedForce
+    for (force_index, force) in enumerate(system.getForces()):
+        if force.__class__.__name__ != 'NonbondedForce':
+            forces_to_remove.append(force_index)
+    for force_index in reversed(forces_to_remove):
+        system.removeForce(force_index)
+    # Compute sterics + exceptions
+    PSE_ESE = compute_energy(system, positions)
+    # Turn off all charges, leaving all exceptions
+    for (force_index, force) in enumerate(system.getForces()):
+        if force.__class__.__name__ == 'NonbondedForce':
+            for particle_index in range(system.getNumParticles()):
+                [charge, sigma, epsilon] = force.getParticleParameters(particle_index)
+                force.setParticleParameters(particle_index, abs(0*charge), sigma, epsilon)
+    # Compute sterics + exceptions
+    PS_ESE = compute_energy(system, positions)
+    # Turn off all direct interactions
+    for (force_index, force) in enumerate(system.getForces()):
+        if force.__class__.__name__ == 'NonbondedForce':
+            for particle_index in range(system.getNumParticles()):
+                [charge, sigma, epsilon] = force.getParticleParameters(particle_index)
+                force.setParticleParameters(particle_index, abs(0*charge), sigma, abs(0*epsilon))
+    # Compute exception energy only
+    ESE = compute_energy(system, positions)
+    # Turn off all electrostatics exceptions
+    for (force_index, force) in enumerate(system.getForces()):
+        if force.__class__.__name__ == 'NonbondedForce':
+            for exception_index in range(force.getNumExceptions()):
+                [iatom, jatom, chargeprod, sigma, epsilon] = force.getExceptionParameters(exception_index)
+                force.setExceptionParameters(exception_index, iatom, jatom, abs(0*chargeprod), sigma, epsilon)
+    # Compute sterics + exceptions
+    ES = compute_energy(system, positions)
+    # Turn off all sterics exceptions
+    for (force_index, force) in enumerate(system.getForces()):
+        if force.__class__.__name__ == 'NonbondedForce':
+            for exception_index in range(force.getNumExceptions()):
+                [iatom, jatom, chargeprod, sigma, epsilon] = force.getExceptionParameters(exception_index)
+                force.setExceptionParameters(exception_index, iatom, jatom, abs(0*chargeprod), sigma, abs(0*epsilon))
+    # Energy should be zero.
+    off = compute_energy(system, positions)
+    assert (off == 0.0), "Energy should be zero when electrostatics and sterics particle and exceptions are turned off."
+
+    # Compute other values.
+    PS = PS_ESE - P_ESE
+    PE = PSE_ESE - PS_ESE
+    EE = ESE - ES
+
+    # Summarize.
+    print('%18s %18s' % ('component', 'potential (kcal/mol)'))
+    print('%18s %18.3f' % ('particle sterics', PS))
+    print('%18s %18.3f' % ('particle electrostatics', PE))
+    print('%18s %18.3f' % ('exceptions sterics', ES))
+    print('%18s %18.3f' % ('exceptions electrostatics', EE))
+
 
 def check_noninteracting_energy_components(factory, positions):
     """Check noninteracting energy components are zero when appropriate.
@@ -435,9 +516,10 @@ def alchemical_factory_check(reference_system, positions, platform_name=None, pr
     print('check noninteracting energy components...')
     check_noninteracting_energy_components(factory, positions)
 
+    # DEBUG: Turn this back on!
     # Compare energies for fully-interacting system
-    print('compare system energies...')
-    compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
+    #print('compare system energies...')
+    #compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
 
     return
 
@@ -1017,19 +1099,4 @@ if __name__ == "__main__":
     config_root_logger(True)
 
     logging.basicConfig(level=logging.INFO)
-    #test_waterbox()
-    test_annihilated_states()
-
-
-    #name = 'Lennard-Jones fluid with dispersion correction'
-    #name = 'Src in GBSA, with Src sterics annihilated'
-    #name = 'Src in GBSA'
-    #name = 'alanine dipeptide in OBC GBSA, with sterics annihilated'
-    #name = 'alanine dipeptide in OBC GBSA'
-    name = 'Src in TIP3P with reaction field, with Src sterics annihilated'
-    test_system = test_systems[name]
-    reference_system = test_system['test'].system
-    positions = test_system['test'].positions
-    ligand_atoms = test_system['ligand_atoms']
-    receptor_atoms = test_system['receptor_atoms']
-    alchemical_factory_check(reference_system, positions, receptor_atoms, ligand_atoms)
+    test_alchemical_accuracy()
