@@ -307,6 +307,21 @@ def test_denihilated_states(platform_name=None, precision=None):
     if (abs(delta) > MAX_DELTA):
         raise Exception("Maximum allowable difference lambda=1 energy and lambda=0 energy in vacuum and periodic box exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
+def check_interacting_energy_components(factory, positions):
+    """Compare full and alchemically-modified system energies by energy component.
+
+    Parameters
+    ----------
+    factory : AbsoluteAlchemicalFactory
+        The factory to test.
+    positions : simtk.openmm.unit.Quantity of dimension [nparticles,3] with units compatible with Angstroms
+        The positions to test.
+
+    """
+    # TODO: Compare total energies for each category with original fully-interacting system.
+
+    pass
+
 def check_noninteracting_energy_components(factory, positions):
     """Check noninteracting energy components are zero when appropriate.
 
@@ -319,7 +334,7 @@ def check_noninteracting_energy_components(factory, positions):
 
     """
     alchemical_state = factory.NoninteractingAlchemicalState()
-    energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=True)
+    energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=False)
     energy_unit = unit.kilojoule_per_mole
     print(energy_components)
 
@@ -412,13 +427,17 @@ def alchemical_factory_check(reference_system, positions, platform_name=None, pr
         platform = openmm.Platform.getPlatformByName(platform_name)
     alchemical_system = factory.createPerturbedSystem()
 
-    # Compare energies for fully-interacting system
-    print('compare system energies...')
-    compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
+    # Check energies for fully interacting system.
+    print('check fully interacting interacting energy components...')
+    check_interacting_energy_components(factory, positions)
 
     # Check energies for noninteracting system.
     print('check noninteracting energy components...')
     check_noninteracting_energy_components(factory, positions)
+
+    # Compare energies for fully-interacting system
+    print('compare system energies...')
+    compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
 
     return
 
