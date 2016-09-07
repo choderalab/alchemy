@@ -38,7 +38,7 @@ def find_package_data(data_root, package_root):
 
 
 # #########################
-VERSION = '1.2.0'
+VERSION = '1.3.0'
 ISRELEASED = True
 __version__ = VERSION
 # #########################
@@ -56,11 +56,11 @@ Operating System :: POSIX
 Operating System :: Unix
 Operating System :: MacOS
 Programming Language :: Python :: 2
-Programming Language :: Python :: 2.6
 Programming Language :: Python :: 2.7
 Programming Language :: Python :: 3
 Programming Language :: Python :: 3.3
 Programming Language :: Python :: 3.4
+Programming Language :: Python :: 3.5
 """
 
 extensions = []
@@ -79,7 +79,7 @@ setup(name='alchemy',
       zip_safe=False,
       ext_modules=extensions,
       install_requires=[
-        'openmm >=6.3',
+        'openmm',
         'numpy',
         ],
       )

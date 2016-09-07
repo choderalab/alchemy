@@ -203,10 +203,15 @@ def check_waterbox(platform=None, precision=None, nonbondedMethod=openmm.Nonbond
         raise Exception("Maximum allowable deviation on platform %s exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (platform_name, delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
 def test_waterbox():
+    """Compare annihilated states in vacuum and a large box.
+    """
     for platform_index in range(openmm.Platform.getNumPlatforms()):
         for nonbondedMethod in [openmm.NonbondedForce.PME, openmm.NonbondedForce.CutoffPeriodic]:
             platform = openmm.Platform.getPlatform(platform_index)
             f = partial(check_waterbox, platform=platform, nonbondedMethod=nonbondedMethod)
+            platform_name = platform.getName()
+            nonbondedMethod_name = 'PME' if (nonbondedMethod == openmm.NonbondedForce.PME) else 'CutoffPeriodic'
+            f.description = 'Comparing waterbox annihilated states for platform %s and nonbondedMethod %s' % (platform_name, nonbondedMethod_name)
             yield f
 
 def compare_platforms(system, positions, factory_args=dict()):
@@ -240,8 +245,8 @@ def compare_platforms(system, positions, factory_args=dict()):
             if (abs(delta) > MAX_DELTA):
                 raise Exception("Maximum allowable deviation on platform %s exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (platform_name, delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
-def test_annihilated_states(platform_name=None, precision=None):
-    """Compare annihilated states in vacuum and a large box.
+def test_denihilated_states(platform_name=None, precision=None):
+    """Compare annihilated electrostatics / decoupled sterics states in vacuum and a large box.
     """
     from openmmtools import testsystems
     testsystem = testsystems.TolueneVacuum()
@@ -301,6 +306,137 @@ def test_annihilated_states(platform_name=None, precision=None):
     delta = (vacuum_alchemical_1_energy - vacuum_alchemical_0_energy) - (periodic_alchemical_1_energy - periodic_alchemical_0_energy)
     if (abs(delta) > MAX_DELTA):
         raise Exception("Maximum allowable difference lambda=1 energy and lambda=0 energy in vacuum and periodic box exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
+
+def check_interacting_energy_components(factory, positions):
+    """Compare full and alchemically-modified system energies by energy component.
+
+    Parameters
+    ----------
+    factory : AbsoluteAlchemicalFactory
+        The factory to test.
+    positions : simtk.openmm.unit.Quantity of dimension [nparticles,3] with units compatible with Angstroms
+        The positions to test.
+
+    """
+    alchemical_state = factory.NoninteractingAlchemicalState()
+    energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=False)
+    energy_unit = unit.kilojoule_per_mole
+
+    # Mapping between standard reference system and alchemical system forces to be summed to match
+    force_component_match = {
+        'HarmonicBondForce' : ['unmodified HarmonicBondForce', 'alchemically modified HarmonicBondForce'],
+        'HarmonicAngleForce' : ['unmodified HarmonicAngleForce', 'alchemically modified HarmonicAngleForce'],
+        'PeriodicTorsionForce' : ['unmodified PeriodicTorsionForce', 'alchemically modified PeriodicTorsionForce'],
+    }
+
+    import copy
+    reference_system = copy.deepcopy(factory.reference_system)
+    alchemical_system = copy.deepcopy(factory.alchemically_modified_system)
+
+    energy_unit = unit.kilocalories_per_mole
+
+    def compute_energy(system, positions):
+        timestep = 1.0 * unit.femtoseconds
+        integrator = openmm.VerletIntegrator(timestep)
+        context = openmm.Context(system, integrator)
+        context.setPositions(positions)
+        potential = context.getState(getEnergy=True).getPotentialEnergy() / energy_unit
+        del context, integrator
+        return potential
+
+    # Compute energy component decomposition of standard system NonbondedForce
+    system = copy.deepcopy(factory.reference_system)
+    # Sterics (nonbonded plus exceptions)
+    forces_to_remove = list()
+    # Remove all forces but NonbondedForce
+    for (force_index, force) in enumerate(system.getForces()):
+        if force.__class__.__name__ != 'NonbondedForce':
+            forces_to_remove.append(force_index)
+    for force_index in reversed(forces_to_remove):
+        system.removeForce(force_index)
+    # Compute sterics + exceptions
+    PSE_ESE = compute_energy(system, positions)
+    # Turn off all charges, leaving all exceptions
+    for (force_index, force) in enumerate(system.getForces()):
+        if force.__class__.__name__ == 'NonbondedForce':
+            for particle_index in range(system.getNumParticles()):
+                [charge, sigma, epsilon] = force.getParticleParameters(particle_index)
+                force.setParticleParameters(particle_index, abs(0*charge), sigma, epsilon)
+    # Compute sterics + exceptions
+    PS_ESE = compute_energy(system, positions)
+    # Turn off all direct interactions
+    for (force_index, force) in enumerate(system.getForces()):
+        if force.__class__.__name__ == 'NonbondedForce':
+            for particle_index in range(system.getNumParticles()):
+                [charge, sigma, epsilon] = force.getParticleParameters(particle_index)
+                force.setParticleParameters(particle_index, abs(0*charge), sigma, abs(0*epsilon))
+    # Compute exception energy only
+    ESE = compute_energy(system, positions)
+    # Turn off all electrostatics exceptions
+    for (force_index, force) in enumerate(system.getForces()):
+        if force.__class__.__name__ == 'NonbondedForce':
+            for exception_index in range(force.getNumExceptions()):
+                [iatom, jatom, chargeprod, sigma, epsilon] = force.getExceptionParameters(exception_index)
+                force.setExceptionParameters(exception_index, iatom, jatom, abs(0*chargeprod), sigma, epsilon)
+    # Compute sterics + exceptions
+    ES = compute_energy(system, positions)
+    # Turn off all sterics exceptions
+    for (force_index, force) in enumerate(system.getForces()):
+        if force.__class__.__name__ == 'NonbondedForce':
+            for exception_index in range(force.getNumExceptions()):
+                [iatom, jatom, chargeprod, sigma, epsilon] = force.getExceptionParameters(exception_index)
+                force.setExceptionParameters(exception_index, iatom, jatom, abs(0*chargeprod), sigma, abs(0*epsilon))
+    # Energy should be zero.
+    off = compute_energy(system, positions)
+    assert (off == 0.0), "Energy should be zero when electrostatics and sterics particle and exceptions are turned off."
+
+    # Compute other values.
+    PS = PS_ESE - P_ESE
+    PE = PSE_ESE - PS_ESE
+    EE = ESE - ES
+
+    # Summarize.
+    print('%18s %18s' % ('component', 'potential (kcal/mol)'))
+    print('%18s %18.3f' % ('particle sterics', PS))
+    print('%18s %18.3f' % ('particle electrostatics', PE))
+    print('%18s %18.3f' % ('exceptions sterics', ES))
+    print('%18s %18.3f' % ('exceptions electrostatics', EE))
+
+
+def check_noninteracting_energy_components(factory, positions):
+    """Check noninteracting energy components are zero when appropriate.
+
+    Parameters
+    ----------
+    factory : AbsoluteAlchemicalFactory
+        The factory to test.
+    positions : simtk.openmm.unit.Quantity of dimension [nparticles,3] with units compatible with Angstroms
+        The positions to test.
+
+    """
+    alchemical_state = factory.NoninteractingAlchemicalState()
+    energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=False)
+    energy_unit = unit.kilojoule_per_mole
+    print(energy_components)
+
+    def assert_zero_energy(label):
+        print('testing %s' % label)
+        value = energy_components[label]
+        assert abs(value / energy_unit) == 0.0, "''%s' should have zero energy in annihilated alchemical state, but energy is %s" % (label, str(value))
+
+    if factory.annihilate_sterics:
+        # Check that alchemical sterics have been annihilated
+        assert_zero_energy('alchemically modified NonbondedForce for sterics')
+        assert_zero_energy('alchemically modified NonbondedForce for sterics exceptions')
+    if factory.annihilate_electrostatics:
+        # Check that alchemical electrostatics have been annihilated
+        assert_zero_energy('alchemically modified NonbondedForce for electrostatics')
+        assert_zero_energy('alchemically modified NonbondedForce for electrostatics exceptions')
+    # Check valence terms
+    for force_name in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce', 'GBSAOBCForce']:
+        force_label = 'alchemically modified ' + force_name
+        if force_label in energy_components:
+            assert_zero_energy(force_label)
 
 def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
     # Compare energies.
@@ -371,7 +507,20 @@ def alchemical_factory_check(reference_system, positions, platform_name=None, pr
     if platform_name:
         platform = openmm.Platform.getPlatformByName(platform_name)
     alchemical_system = factory.createPerturbedSystem()
-    compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
+
+    # Check energies for fully interacting system.
+    print('check fully interacting interacting energy components...')
+    check_interacting_energy_components(factory, positions)
+
+    # Check energies for noninteracting system.
+    print('check noninteracting energy components...')
+    check_noninteracting_energy_components(factory, positions)
+
+    # DEBUG: Turn this back on!
+    # Compare energies for fully-interacting system
+    #print('compare system energies...')
+    #compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
+
     return
 
 def benchmark(reference_system, positions, platform_name=None, nsteps=500, timestep=1.0*unit.femtoseconds, factory_args=None):
@@ -724,7 +873,49 @@ def generate_trace(test_system):
 # TEST SYSTEM DEFINITIONS
 #=============================================================================================
 
+accuracy_testsystem_names = [
+    'Lennard-Jones cluster',
+    'Lennard-Jones fluid without dispersion correction',
+    'Lennard-Jones fluid with dispersion correction',
+    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
+    'TIP3P with reaction field, switch, no dispersion correction',
+    'TIP3P with reaction field, switch, dispersion correction',
+    'alanine dipeptide in vacuum with annihilated sterics',
+    'toluene in implicit solvent',
+]
+
+overlap_testsystem_names = [
+    'Lennard-Jones cluster',
+    'Lennard-Jones fluid without dispersion correction',
+    'Lennard-Jones fluid with dispersion correction',
+    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
+    'TIP3P with reaction field, switch, no dispersion correction',
+    'TIP3P with reaction field, switch, dispersion correction',
+    'alanine dipeptide in vacuum with annihilated sterics',
+    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
+    'toluene in implicit solvent',
+]
+
+# DEBUG
+accuracy_testsystem_names = list()
+overlap_testsystem_names = list()
+
 test_systems = dict()
+
+# Generate host-guest test systems combinatorially.
+for nonbonded_method in [openmm.NonbondedForce.CutoffPeriodic, openmm.NonbondedForce.PME]:
+    nonbonded_treatment = 'CutoffPeriodic' if (nonbonded_method == openmm.NonbondedForce.CutoffPeriodic) else 'PME'
+    for annihilate_sterics in [False, True]:
+        sterics_treatment = 'annihilated' if annihilate_sterics else 'decoupled'
+        for annihilate_electrostatics in [False, True]:
+            electrostatics_treatment = 'annihilated' if annihilate_electrostatics else 'decoupled'
+            name = 'host-guest system in explicit solvent with %s using %s sterics and %s electrostatics' % (nonbonded_treatment, sterics_treatment, electrostatics_treatment)
+            test_systems[name] = {
+                'test' : testsystems.HostGuestExplicit(),
+                'factory_args' : {'ligand_atoms' : range(126, 156), 'receptor_atoms' : range(0, 126),
+                'annihilate_sterics' : annihilate_sterics, 'annihilate_electrostatics' : annihilate_electrostatics }}
+            accuracy_testsystem_names.append(name)
+
 test_systems['Lennard-Jones cluster'] = {
     'test' : testsystems.LennardJonesCluster(),
     'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }}
@@ -820,29 +1011,6 @@ test_systems['toluene in implicit solvent'] = {
 #    'test' : testsystems.SrcExplicit(nonbondedMethod=app.CutoffPeriodic),
 #    'ligand_atoms' : range(0,21), 'receptor_atoms' : range(21,4091) }
 
-accuracy_testsystem_names = [
-    'Lennard-Jones cluster',
-    'Lennard-Jones fluid without dispersion correction',
-    'Lennard-Jones fluid with dispersion correction',
-    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
-    'TIP3P with reaction field, switch, no dispersion correction',
-    'TIP3P with reaction field, switch, dispersion correction',
-    'alanine dipeptide in vacuum with annihilated sterics',
-    'toluene in implicit solvent',
-]
-
-overlap_testsystem_names = [
-    'Lennard-Jones cluster',
-    'Lennard-Jones fluid without dispersion correction',
-    'Lennard-Jones fluid with dispersion correction',
-    'TIP3P with reaction field, no charges, no switch, no dispersion correction',
-    'TIP3P with reaction field, switch, no dispersion correction',
-    'TIP3P with reaction field, switch, dispersion correction',
-    'alanine dipeptide in vacuum with annihilated sterics',
-    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
-    'toluene in implicit solvent',
-]
-
 #=============================================================================================
 # Test various options to AbsoluteAlchemicalFactory
 #=============================================================================================
@@ -864,7 +1032,7 @@ def test_alchemical_functions():
 
 def test_softcore_parameters():
     """
-    Testing alchemical slave functions
+    Testing softcore parameters
     """
     alchemical_functions = { 'lambda_sterics' : 'lambda', 'lambda_electrostatics' : 'lambda', 'lambda_bonds' : 'lambda', 'lambda_angles' : 'lambda', 'lambda_torsions' : 'lambda' }
     name = 'Lennard-Jones fluid with dispersion correction'
@@ -909,9 +1077,9 @@ def test_alchemical_accuracy():
         f.description = "Testing alchemical fidelity of %s..." % name
         yield f
 
-def test_alchemical_accuracy():
+def test_platforms():
     """
-    Generate nose tests for overlap for all alchemical test systems.
+    Generate nosetests for comparing platform energies...
     """
     for name in accuracy_testsystem_names:
         test_system = test_systems[name]
@@ -931,19 +1099,4 @@ if __name__ == "__main__":
     config_root_logger(True)
 
     logging.basicConfig(level=logging.INFO)
-    #test_waterbox()
-    test_annihilated_states()
-
-
-    #name = 'Lennard-Jones fluid with dispersion correction'
-    #name = 'Src in GBSA, with Src sterics annihilated'
-    #name = 'Src in GBSA'
-    #name = 'alanine dipeptide in OBC GBSA, with sterics annihilated'
-    #name = 'alanine dipeptide in OBC GBSA'
-    name = 'Src in TIP3P with reaction field, with Src sterics annihilated'
-    test_system = test_systems[name]
-    reference_system = test_system['test'].system
-    positions = test_system['test'].positions
-    ligand_atoms = test_system['ligand_atoms']
-    receptor_atoms = test_system['receptor_atoms']
-    alchemical_factory_check(reference_system, positions, receptor_atoms, ligand_atoms)
+    test_alchemical_accuracy()
