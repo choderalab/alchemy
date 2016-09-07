@@ -26,12 +26,21 @@ install:
   - echo "cacert=/etc/ssl/certs/ca-certificates.crt" >> ~/.curlrc
 
 script:
+  # Create a test environment
+  - conda create --yes -n test python=$python
+  # Activate the test environment
+  - source activate test
+  # Add org channel
   - conda config --add channels ${ORGNAME}
   # Add omnia dev channels
   - conda config --add channels https://conda.anaconda.org/omnia/label/dev
+  # Build the recipe
   - conda build devtools/conda-recipe
-  - source activate _test
-  - conda install --yes --quiet nose nose-timer
+  # Install the package
+  - conda install --yes --use-local alchemy-dev
+  # Install testing dependencies
+  - conda install --yes --quiet nose nose-timer click netcdf4 pymbar openmmtools
+  # Test the package
   - cd devtools && nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer && cd ..
 
 env:
