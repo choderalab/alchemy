@@ -391,7 +391,7 @@ def check_interacting_energy_components(factory, positions):
     assert (off == 0.0), "Energy should be zero when electrostatics and sterics particle and exceptions are turned off."
 
     # Compute other values.
-    PS = PS_ESE - P_ESE
+    PS = PS_ESE - ESE
     PE = PSE_ESE - PS_ESE
     EE = ESE - ES
 
