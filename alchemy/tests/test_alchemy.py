@@ -424,19 +424,20 @@ def check_noninteracting_energy_components(factory, positions):
         value = energy_components[label]
         assert abs(value / energy_unit) == 0.0, "''%s' should have zero energy in annihilated alchemical state, but energy is %s" % (label, str(value))
 
-    if factory.annihilate_sterics:
-        # Check that alchemical sterics have been annihilated
-        assert_zero_energy('alchemically modified NonbondedForce for sterics')
-        assert_zero_energy('alchemically modified NonbondedForce for sterics exceptions')
-    if factory.annihilate_electrostatics:
-        # Check that alchemical electrostatics have been annihilated
-        assert_zero_energy('alchemically modified NonbondedForce for electrostatics')
-        assert_zero_energy('alchemically modified NonbondedForce for electrostatics exceptions')
+    # Check that alchemical sterics have been annihilated
+    assert_zero_energy('alchemically modified NonbondedForce for sterics')
+    assert_zero_energy('alchemically modified NonbondedForce for sterics exceptions')
+
+    # Check that alchemical electrostatics have been annihilated
+    assert_zero_energy('alchemically modified NonbondedForce for electrostatics')
+    assert_zero_energy('alchemically modified NonbondedForce for electrostatics exceptions')
+
     # Check valence terms
     for force_name in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce', 'GBSAOBCForce']:
         force_label = 'alchemically modified ' + force_name
         if force_label in energy_components:
             assert_zero_energy(force_label)
+
 
 def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
     # Compare energies.
@@ -503,6 +504,7 @@ def alchemical_factory_check(reference_system, positions, platform_name=None, pr
     final_time = time.time()
     elapsed_time = final_time - initial_time
     logger.info("AbsoluteAlchemicalFactory initialization took %.3f s" % elapsed_time)
+
     platform = None
     if platform_name:
         platform = openmm.Platform.getPlatformByName(platform_name)
@@ -516,10 +518,9 @@ def alchemical_factory_check(reference_system, positions, platform_name=None, pr
     print('check noninteracting energy components...')
     check_noninteracting_energy_components(factory, positions)
 
-    # DEBUG: Turn this back on!
     # Compare energies for fully-interacting system
-    #print('compare system energies...')
-    #compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
+    print('compare system energies...')
+    compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
 
     return
 
