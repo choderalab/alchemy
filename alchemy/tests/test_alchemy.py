@@ -308,70 +308,166 @@ def test_denihilated_states(platform_name=None, precision=None):
         raise Exception("Maximum allowable difference lambda=1 energy and lambda=0 energy in vacuum and periodic box exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
 
-def dissect_nonbonded_energy(system, positions):
+def assert_almost_equal(energy1, energy2, err_msg):
+        delta = energy1 - energy2
+        err_msg += ' interactions do not match! Reference {}, alchemical {},' \
+                   ' difference {}'.format(energy1, energy2, delta)
+        assert abs(delta) < MAX_DELTA, err_msg
 
-    system = copy.deepcopy(system)
 
-    def turn_off(force, sterics=False, electrostatics=False, exceptions=False):
+def dissect_nonbonded_energy(reference_system, positions, alchemical_atoms, platform=None):
+    """Dissect the contributions to NonbondedForce of the reference system by atom group
+    and sterics/electrostatics.
+
+    Parameters
+    ----------
+    reference_system : simtk.openmm.System
+        The reference system with the NonbondedForce to dissect.
+    positions : simtk.openmm.unit.Quantity of dimension [nparticles,3] with units compatible with Angstroms
+        The positions to test.
+    alchemical_atoms : set of int
+        The indices of the alchemical atoms.
+    platform : simtk.openmm.Platform
+        The platform used to compute energies.
+
+    Returns
+    -------
+    tuple of simtk.openmm.unit.Quantity with units compatible with kJ/mol
+        All contributions to the potential energy of NonbondedForce in the order:
+        nonalchem_part_sterics: particle sterics interactions between nonalchemical atoms
+        alchem_part_sterics: particle sterics interactions between alchemical atoms
+        interface_part_sterics: particle sterics interactions between nonalchemical-alchemical atoms
+        nonalchem_part_electro: particle electrostatics interactions between nonalchemical atoms
+        alchem_part_electro: particle electrostatics interactions between alchemical atoms
+        interface_part_electro: particle electrostatics interactions between nonalchemical-alchemical atoms
+        nonalchem_excep_sterics: particle sterics 1,4 exceptions between nonalchemical atoms
+        alchem_excep_sterics: particle sterics 1,4 exceptions between alchemical atoms
+        interface_excep_sterics: particle sterics 1,4 exceptions between nonalchemical-alchemical atoms
+        nonalchem_excep_electro: particle electrostatics 1,4 exceptions between nonalchemical atoms
+        alchem_excep_electro: particle electrostatics 1,4 exceptions between alchemical atoms
+        interface_excep_electro: particle electrostatics 1,4 exceptions between nonalchemical-alchemical atoms
+
+    """
+
+    def turn_off(force, sterics=False, electrostatics=False,
+                 exceptions=False, only_atoms=frozenset()):
+        if len(only_atoms) == 0:  # if empty, turn off all particles
+            only_atoms = set(range(force.getNumParticles()))
         e_coeff = 0.0 if sterics else 1.0
         c_coeff = 0.0 if electrostatics else 1.0
         if exceptions:  # Turn off exceptions
             for exception_index in range(force.getNumExceptions()):
                 [iatom, jatom, charge, sigma, epsilon] = force.getExceptionParameters(exception_index)
-                force.setExceptionParameters(exception_index, iatom, jatom, c_coeff*charge,
-                                             sigma, e_coeff*epsilon)
+                if iatom in only_atoms or jatom in only_atoms:
+                    force.setExceptionParameters(exception_index, iatom, jatom, c_coeff*charge,
+                                                 sigma, e_coeff*epsilon)
         else:  # Turn off particle interactions
             for particle_index in range(force.getNumParticles()):
-                [charge, sigma, epsilon] = force.getParticleParameters(particle_index)
-                force.setParticleParameters(particle_index, c_coeff*charge, sigma, e_coeff*epsilon)
+                if particle_index in only_atoms:
+                    [charge, sigma, epsilon] = force.getParticleParameters(particle_index)
+                    force.setParticleParameters(particle_index, c_coeff*charge, sigma, e_coeff*epsilon)
+
+    def restore_system(reference_system):
+        system = copy.deepcopy(reference_system)
+        nonbonded_force = system.getForces()[0]
+        return system, nonbonded_force
+
+    nonalchemical_atoms = set(range(reference_system.getNumParticles())).difference(alchemical_atoms)
 
     # Remove all forces but NonbondedForce
-    nonbonded_force = None
+    reference_system = copy.deepcopy(reference_system)  # don't modify original system
     forces_to_remove = list()
-    for force_index, force in enumerate(system.getForces()):
-        if force.__class__.__name__ == 'NonbondedForce':
-            nonbonded_force = force
-        else:
+    for force_index, force in enumerate(reference_system.getForces()):
+        if force.__class__.__name__ != 'NonbondedForce':
             forces_to_remove.append(force_index)
     for force_index in reversed(forces_to_remove):
-        system.removeForce(force_index)
+        reference_system.removeForce(force_index)
+    assert len(reference_system.getForces()) == 1
 
-    # Energy including particle sterics/electrostatics + exceptions sterics/electrostatics
-    print 'compute PSE_ESE'
-    PSE_ESE = compute_energy(system, positions)
+    # Compute particle interactions between different groups of atoms
+    # ----------------------------------------------------------------
+    system, nonbonded_force = restore_system(reference_system)
 
-    # Energy including particle sterics + exceptions sterics/electrostatics
+    # Compute total energy from nonbonded interactions
+    tot_energy = compute_energy(system, positions, platform)
+
+    # Compute contributions from particle sterics
+    turn_off(nonbonded_force, sterics=True, only_atoms=alchemical_atoms)
+    tot_energy_no_alchem_part_sterics = compute_energy(system, positions, platform)
+    system, nonbonded_force = restore_system(reference_system)  # Restore alchemical sterics
+    turn_off(nonbonded_force, sterics=True, only_atoms=nonalchemical_atoms)
+    tot_energy_no_nonalchem_part_sterics = compute_energy(system, positions, platform)
+    turn_off(nonbonded_force, sterics=True)
+    tot_energy_no_part_sterics = compute_energy(system, positions, platform)
+
+    tot_part_sterics = tot_energy - tot_energy_no_part_sterics
+    nonalchem_part_sterics = tot_energy_no_alchem_part_sterics - tot_energy_no_part_sterics
+    alchem_part_sterics = tot_energy_no_nonalchem_part_sterics - tot_energy_no_part_sterics
+    interface_part_sterics = tot_part_sterics - nonalchem_part_sterics - alchem_part_sterics
+
+    # Compute contributions from particle electrostatics
+    system, nonbonded_force = restore_system(reference_system)  # Restore sterics
+    turn_off(nonbonded_force, electrostatics=True, only_atoms=alchemical_atoms)
+    tot_energy_no_alchem_part_electro = compute_energy(system, positions, platform)
+    system, nonbonded_force = restore_system(reference_system)  # Restore alchemical electrostatics
+    turn_off(nonbonded_force, electrostatics=True, only_atoms=nonalchemical_atoms)
+    tot_energy_no_nonalchem_part_electro = compute_energy(system, positions, platform)
     turn_off(nonbonded_force, electrostatics=True)
-    print 'compute PS_ESE'
-    PS_ESE = compute_energy(system, positions)
+    tot_energy_no_part_electro = compute_energy(system, positions, platform)
 
-    # Energy including exceptions sterics/electrostatics
-    turn_off(nonbonded_force, sterics=True, electrostatics=True)
-    print 'compute ESE'
-    ESE = compute_energy(system, positions)
+    tot_part_electro = tot_energy - tot_energy_no_part_electro
+    nonalchem_part_electro = tot_energy_no_alchem_part_electro - tot_energy_no_part_electro
+    alchem_part_electro = tot_energy_no_nonalchem_part_electro - tot_energy_no_part_electro
+    interface_part_electro = tot_part_electro - nonalchem_part_electro - alchem_part_electro
 
-    # Energy contribution of exceptions sterics
+
+    # Compute exceptions between different groups of atoms
+    # -----------------------------------------------------
+
+    # Compute contributions from exceptions sterics
+    system, nonbonded_force = restore_system(reference_system)  # Restore particle interactions
+    turn_off(nonbonded_force, sterics=True, exceptions=True, only_atoms=alchemical_atoms)
+    tot_energy_no_alchem_excep_sterics = compute_energy(system, positions, platform)
+    system, nonbonded_force = restore_system(reference_system)  # Restore alchemical sterics
+    turn_off(nonbonded_force, sterics=True, exceptions=True, only_atoms=nonalchemical_atoms)
+    tot_energy_no_nonalchem_excep_sterics = compute_energy(system, positions, platform)
+    turn_off(nonbonded_force, sterics=True, exceptions=True)
+    tot_energy_no_excep_sterics = compute_energy(system, positions, platform)
+
+    tot_excep_sterics = tot_energy - tot_energy_no_excep_sterics
+    nonalchem_excep_sterics = tot_energy_no_alchem_excep_sterics - tot_energy_no_excep_sterics
+    alchem_excep_sterics = tot_energy_no_nonalchem_excep_sterics - tot_energy_no_excep_sterics
+    interface_excep_sterics = tot_excep_sterics - nonalchem_excep_sterics - alchem_excep_sterics
+
+    # Compute contributions from exceptions electrostatics
+    system, nonbonded_force = restore_system(reference_system)  # Restore exceptions sterics
+    turn_off(nonbonded_force, electrostatics=True, exceptions=True, only_atoms=alchemical_atoms)
+    tot_energy_no_alchem_excep_electro = compute_energy(system, positions, platform)
+    system, nonbonded_force = restore_system(reference_system)  # Restore alchemical electrostatics
+    turn_off(nonbonded_force, electrostatics=True, exceptions=True, only_atoms=nonalchemical_atoms)
+    tot_energy_no_nonalchem_excep_electro = compute_energy(system, positions, platform)
     turn_off(nonbonded_force, electrostatics=True, exceptions=True)
-    print 'compute ES'
-    ES = compute_energy(system, positions)
+    tot_energy_no_excep_electro = compute_energy(system, positions, platform)
 
-    # Turn off all. Energy should be zero.
-    turn_off(nonbonded_force, sterics=True, electrostatics=True, exceptions=True)
-    print 'compute off'
-    off = compute_energy(system, positions) / unit.kilocalories_per_mole
-    assert off == 0.0, "Energy should be zero when electrostatics and sterics " \
-                       "particle and exceptions are turned off."
+    tot_excep_electro = tot_energy - tot_energy_no_excep_electro
+    nonalchem_excep_electro = tot_energy_no_alchem_excep_electro - tot_energy_no_excep_electro
+    alchem_excep_electro = tot_energy_no_nonalchem_excep_electro - tot_energy_no_excep_electro
+    interface_excep_electro = tot_excep_electro - nonalchem_excep_electro - alchem_excep_electro
 
-    # Compute energy contributions for reference system.
-    PS = PS_ESE - ESE  # from particle sterics
-    PE = PSE_ESE - PS_ESE  # from particle electrostatics
-    EE = ESE - ES  # from exception electrostatics
-    assert PSE_ESE == PS + PE + EE + ES
+    assert tot_part_sterics == nonalchem_part_sterics + alchem_part_sterics + interface_part_sterics
+    assert tot_part_electro == nonalchem_part_electro + alchem_part_electro + interface_part_electro
+    assert tot_excep_sterics == nonalchem_excep_sterics + alchem_excep_sterics + interface_excep_sterics
+    assert tot_excep_electro == nonalchem_excep_electro + alchem_excep_electro + interface_excep_electro
+    assert_almost_equal(tot_energy, tot_part_sterics + tot_part_electro + tot_excep_sterics + tot_excep_electro,
+                        'Inconsistency during dissection of nonbonded contributions:')
 
-    return PS, PE, ES, EE
+    return nonalchem_part_sterics, alchem_part_sterics, interface_part_sterics,\
+           nonalchem_part_electro, alchem_part_electro, interface_part_electro,\
+           nonalchem_excep_sterics, alchem_excep_sterics, interface_excep_sterics,\
+           nonalchem_excep_electro, alchem_excep_electro, interface_excep_electro
 
 
-def check_interacting_energy_components(factory, positions):
+def check_interacting_energy_components(factory, positions, platform=None):
     """Compare full and alchemically-modified system energies by energy component.
 
     Parameters
@@ -380,43 +476,84 @@ def check_interacting_energy_components(factory, positions):
         The factory to test.
     positions : simtk.openmm.unit.Quantity of dimension [nparticles,3] with units compatible with Angstroms
         The positions to test.
+    platform : simtk.openmm.Platform
+        The platform used to compute energies.
 
     """
-
-    def assert_equal(energy1, energy2, err_msg):
-        delta = energy1 - energy2
-        err_msg += ' interactions do not match! Reference {},' \
-                   'alchemical {}, diff {}'.format(energy1, energy2, delta)
-        assert abs(delta) < MAX_DELTA, err_msg
 
     reference_system = copy.deepcopy(factory.reference_system)
     alchemical_system = copy.deepcopy(factory.alchemically_modified_system)
 
     # Get energy components of reference system's nonbonded force
-    energy_components = dissect_nonbonded_energy(reference_system, positions)
-    part_sterics, part_electro, excep_sterics, excep_electro = energy_components
+    energy_components = dissect_nonbonded_energy(reference_system, positions,
+                                                 factory.ligand_atomset, platform)
+    nonalchem_part_sterics, alchem_part_sterics, interface_part_sterics,\
+    nonalchem_part_electro, alchem_part_electro, interface_part_electro,\
+    nonalchem_excep_sterics, alchem_excep_sterics, interface_excep_sterics,\
+    nonalchem_excep_electro, alchem_excep_electro, interface_excep_electro = energy_components
 
     # Get alchemically-modified energy components
     alchemical_state = factory.FullyInteractingAlchemicalState()
     energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=False)
-    alchem_part_sterics = energy_components['alchemically modified NonbondedForce for sterics']
-    alchem_part_electro = energy_components['alchemically modified NonbondedForce for electrostatics']
-    alchem_excep_sterics = energy_components['alchemically modified NonbondedForce for sterics exceptions']
-    alchem_excep_electro = energy_components['alchemically modified NonbondedForce for electrostatics exceptions']
+    custom_alchem_part_sterics = energy_components['alchemically modified NonbondedForce for sterics']
+    custom_alchem_part_electro = energy_components['alchemically modified NonbondedForce for electrostatics']
+    custom_alchem_excep_sterics = energy_components['alchemically modified NonbondedForce for sterics exceptions']
+    custom_alchem_excep_electro = energy_components['alchemically modified NonbondedForce for electrostatics exceptions']
 
     # Dissect unmodified nonbonded force in alchemical system
-    energy_components = dissect_nonbonded_energy(alchemical_system, positions)
-    unmod_part_sterics, unmod_part_electro, unmod_excep_sterics, unmod_excep_electro = energy_components
+    energy_components = dissect_nonbonded_energy(alchemical_system, positions,
+                                                 factory.ligand_atomset, platform)
+    unmod_nonalchem_part_sterics, unmod_alchem_part_sterics, unmod_interface_part_sterics,\
+    unmod_nonalchem_part_electro, unmod_alchem_part_electro, unmod_interface_part_electro,\
+    unmod_nonalchem_excep_sterics, unmod_alchem_excep_sterics, unmod_interface_excep_sterics,\
+    unmod_nonalchem_excep_electro, unmod_alchem_excep_electro, unmod_interface_excep_electro = energy_components
 
     # Test that all contribution matches
     # -----------------------------------
-    # Total particle sterics and electrostatics must match
-    assert_equal(part_sterics, unmod_part_sterics + alchem_part_sterics, 'Particle sterics')
-    assert_equal(part_electro, unmod_part_electro + alchem_part_electro, 'Particle electrostatics')
 
-    # All exceptions sterics and electrostatics must match
-    assert_equal(excep_sterics, unmod_excep_sterics + alchem_excep_sterics, 'Exception sterics')
-    assert_equal(excep_electro, unmod_excep_electro + alchem_excep_electro, 'Exception electrostatics')
+    # Check sterics interactions
+    assert_almost_equal(nonalchem_part_sterics, unmod_nonalchem_part_sterics,
+                        'Non-alchemical atoms particle sterics')
+    assert_almost_equal(nonalchem_excep_sterics, unmod_nonalchem_excep_sterics,
+                        'Non-alchemical atoms exceptions sterics')
+    if factory.annihilate_sterics:
+        assert_almost_equal(interface_part_sterics + alchem_part_sterics, custom_alchem_part_sterics,
+                            'Alchemical-all atoms particle sterics')
+        assert_almost_equal(interface_excep_sterics + alchem_excep_sterics, custom_alchem_excep_sterics,
+                            'Alchemical-all atoms exceptions sterics')
+        assert unmod_alchem_excep_sterics == 0.0 * unit.kilojoule_per_mole
+    else:
+        assert_almost_equal(interface_part_sterics, custom_alchem_part_sterics,
+                            'Alchemical-nonalchemical atoms particle sterics')
+        assert_almost_equal(interface_excep_sterics, custom_alchem_excep_sterics,
+                            'Alchemical-nonalchemical atoms exceptions sterics')
+        assert_almost_equal(alchem_part_sterics + alchem_excep_sterics, unmod_alchem_excep_sterics,
+                            'Alchemical atoms particle and exceptions sterics')
+    assert unmod_alchem_part_sterics == 0.0 * unit.kilojoule_per_mole
+    assert unmod_interface_part_sterics == 0.0 * unit.kilojoule_per_mole
+    assert unmod_interface_excep_sterics == 0.0 * unit.kilojoule_per_mole
+
+    # Check electrostatics interactions
+    assert_almost_equal(nonalchem_part_electro, unmod_nonalchem_part_electro,
+                        'Non-alchemical atoms particle electrostatics')
+    assert_almost_equal(nonalchem_excep_electro, unmod_nonalchem_excep_electro,
+                        'Non-alchemical atoms exceptions electrostatics')
+    if factory.annihilate_electrostatics:
+        assert_almost_equal(interface_part_electro + alchem_part_electro, custom_alchem_part_electro,
+                            'Alchemical-all atoms particle electrostatics')
+        assert_almost_equal(interface_excep_electro + alchem_excep_electro, custom_alchem_excep_electro,
+                            'Alchemical-all atoms exceptions electrostatics')
+        assert unmod_alchem_excep_electro == 0.0 * unit.kilojoule_per_mole
+    else:
+        assert_almost_equal(interface_part_electro, custom_alchem_part_electro,
+                            'Alchemical-nonalchemical atoms particle electrostatics')
+        assert_almost_equal(interface_excep_electro, custom_alchem_excep_electro,
+                            'Alchemical-nonalchemical atoms exceptions electrostatics')
+        assert_almost_equal(alchem_part_electro + alchem_excep_electro, unmod_alchem_excep_electro,
+                            'Alchemical atoms particle and exceptions electrostatics')
+    assert unmod_alchem_part_electro == 0.0 * unit.kilojoule_per_mole
+    assert unmod_interface_part_electro == 0.0 * unit.kilojoule_per_mole
+    assert unmod_interface_excep_electro == 0.0 * unit.kilojoule_per_mole
 
     # TODO check also forces other than nonbonded
 
@@ -530,11 +667,11 @@ def alchemical_factory_check(reference_system, positions, platform_name=None, pr
 
     # Check energies for fully interacting system.
     print('check fully interacting interacting energy components...')
-    check_interacting_energy_components(factory, positions)
+    check_interacting_energy_components(factory, positions, platform)
 
     # Check energies for noninteracting system.
     print('check noninteracting energy components...')
-    check_noninteracting_energy_components(factory, positions)
+    check_noninteracting_energy_components(factory, positions, platform)
 
     # Compare energies for fully-interacting system
     print('compare system energies...')
@@ -922,15 +1059,15 @@ overlap_testsystem_names = list()
 test_systems = dict()
 
 # Generate host-guest test systems combinatorially.
-for nonbonded_method in [openmm.NonbondedForce.CutoffPeriodic, openmm.NonbondedForce.PME]:
-    nonbonded_treatment = 'CutoffPeriodic' if (nonbonded_method == openmm.NonbondedForce.CutoffPeriodic) else 'PME'
+for nonbonded_method in [openmm.app.CutoffPeriodic, openmm.app.PME]:
+    nonbonded_treatment = 'CutoffPeriodic' if (nonbonded_method == openmm.app.CutoffPeriodic) else 'PME'
     for annihilate_sterics in [False, True]:
         sterics_treatment = 'annihilated' if annihilate_sterics else 'decoupled'
         for annihilate_electrostatics in [False, True]:
             electrostatics_treatment = 'annihilated' if annihilate_electrostatics else 'decoupled'
             name = 'host-guest system in explicit solvent with %s using %s sterics and %s electrostatics' % (nonbonded_treatment, sterics_treatment, electrostatics_treatment)
             test_systems[name] = {
-                'test': testsystems.HostGuestExplicit(),
+                'test': testsystems.HostGuestExplicit(nonbondedMethod=nonbonded_method),
                 'factory_args': {'ligand_atoms': range(126, 156), 'receptor_atoms': range(0, 126),
                                  'softcore_beta': 0.0, 'annihilate_sterics': annihilate_sterics,
                                  'annihilate_electrostatics': annihilate_electrostatics}}
