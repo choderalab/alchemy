@@ -492,6 +492,14 @@ def check_interacting_energy_components(factory, positions, platform=None):
     nn_exception_sterics, aa_exception_sterics, na_exception_sterics,\
     nn_exception_electro, aa_exception_electro, na_exception_electro = energy_components
 
+    # Dissect unmodified nonbonded force in alchemical system
+    energy_components = dissect_nonbonded_energy(alchemical_system, positions,
+                                                 factory.ligand_atomset, platform)
+    unmod_nn_particle_sterics, unmod_aa_particle_sterics, unmod_na_particle_sterics,\
+    unmod_nn_particle_electro, unmod_aa_particle_electro, unmod_na_particle_electro,\
+    unmod_nn_exception_sterics, unmod_aa_exception_sterics, unmod_na_exception_sterics,\
+    unmod_nn_exception_electro, unmod_aa_exception_electro, unmod_na_exception_electro = energy_components
+
     # Get alchemically-modified energy components
     alchemical_state = factory.FullyInteractingAlchemicalState()
     energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=False)
@@ -504,26 +512,20 @@ def check_interacting_energy_components(factory, positions, platform=None):
     na_custom_exception_electro = energy_components['alchemically modified BondForce for non-alchemical/alchemical electrostatics exceptions']
     aa_custom_exception_electro = energy_components['alchemically modified BondForce for alchemical/alchemical electrostatics exceptions']
 
-    # Dissect unmodified nonbonded force in alchemical system
-    energy_components = dissect_nonbonded_energy(alchemical_system, positions,
-                                                 factory.ligand_atomset, platform)
-    unmod_nn_particle_sterics, unmod_aa_particle_sterics, unmod_na_particle_sterics,\
-    unmod_nn_particle_electro, unmod_aa_particle_electro, unmod_na_particle_electro,\
-    unmod_nn_exception_sterics, unmod_aa_exception_sterics, unmod_na_exception_sterics,\
-    unmod_nn_exception_electro, unmod_aa_exception_electro, unmod_na_exception_electro = energy_components
-
-    # Test that all contribution matches
-    # -----------------------------------
+    # Test that all NonbondedForce contributions match
+    # -------------------------------------------------
 
     # All contributions from alchemical atoms in unmodified nonbonded force are turned off
-    assert unmod_aa_particle_sterics == 0.0 * unit.kilojoule_per_mole
-    assert unmod_na_particle_sterics == 0.0 * unit.kilojoule_per_mole
-    assert unmod_aa_exception_sterics == 0.0 * unit.kilojoule_per_mole
-    assert unmod_na_exception_sterics == 0.0 * unit.kilojoule_per_mole
-    assert unmod_aa_particle_electro == 0.0 * unit.kilojoule_per_mole
-    assert unmod_na_particle_electro == 0.0 * unit.kilojoule_per_mole
-    assert unmod_aa_exception_electro == 0.0 * unit.kilojoule_per_mole
-    assert unmod_na_exception_electro == 0.0 * unit.kilojoule_per_mole
+    energy_unit = unit.kilojoule_per_mole
+    err_msg = 'Non-zero contribution from unmodified NonbondedForce alchemical atoms: '
+    assert_almost_equal(unmod_aa_particle_sterics, 0.0 * energy_unit, err_msg)
+    assert_almost_equal(unmod_na_particle_sterics, 0.0 * energy_unit, err_msg)
+    assert_almost_equal(unmod_aa_exception_sterics, 0.0 * energy_unit, err_msg)
+    assert_almost_equal(unmod_na_exception_sterics, 0.0 * energy_unit, err_msg)
+    assert_almost_equal(unmod_aa_particle_electro, 0.0 * energy_unit, err_msg)
+    assert_almost_equal(unmod_na_particle_electro, 0.0 * energy_unit, err_msg)
+    assert_almost_equal(unmod_aa_exception_electro, 0.0 * energy_unit, err_msg)
+    assert_almost_equal(unmod_na_exception_electro, 0.0 * energy_unit, err_msg)
 
     # Check sterics interactions match
     assert_almost_equal(nn_particle_sterics, unmod_nn_particle_sterics,
