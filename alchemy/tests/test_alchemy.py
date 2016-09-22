@@ -487,73 +487,71 @@ def check_interacting_energy_components(factory, positions, platform=None):
     # Get energy components of reference system's nonbonded force
     energy_components = dissect_nonbonded_energy(reference_system, positions,
                                                  factory.ligand_atomset, platform)
-    nonalchem_part_sterics, alchem_part_sterics, interface_part_sterics,\
-    nonalchem_part_electro, alchem_part_electro, interface_part_electro,\
-    nonalchem_excep_sterics, alchem_excep_sterics, interface_excep_sterics,\
-    nonalchem_excep_electro, alchem_excep_electro, interface_excep_electro = energy_components
+    nn_particle_sterics, aa_particle_sterics, na_particle_sterics,\
+    nn_particle_electro, aa_particle_electro, na_particle_electro,\
+    nn_exception_sterics, aa_exception_sterics, na_exception_sterics,\
+    nn_exception_electro, aa_exception_electro, na_exception_electro = energy_components
 
     # Get alchemically-modified energy components
     alchemical_state = factory.FullyInteractingAlchemicalState()
     energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=False)
-    custom_alchem_part_sterics = energy_components['alchemically modified NonbondedForce for sterics']
-    custom_alchem_part_electro = energy_components['alchemically modified NonbondedForce for electrostatics']
-    custom_alchem_excep_sterics = energy_components['alchemically modified NonbondedForce for sterics exceptions']
-    custom_alchem_excep_electro = energy_components['alchemically modified NonbondedForce for electrostatics exceptions']
+    na_custom_particle_sterics = energy_components['alchemically modified NonbondedForce for non-alchemical/alchemical sterics']
+    aa_custom_particle_sterics = energy_components['alchemically modified NonbondedForce for alchemical/alchemical sterics']
+    na_custom_particle_electro = energy_components['alchemically modified NonbondedForce for non-alchemical/alchemical electrostatics']
+    aa_custom_particle_electro = energy_components['alchemically modified NonbondedForce for alchemical/alchemical electrostatics']
+    na_custom_exception_sterics = energy_components['alchemically modified BondForce for non-alchemical/alchemical sterics exceptions']
+    aa_custom_exception_sterics = energy_components['alchemically modified BondForce for alchemical/alchemical sterics exceptions']
+    na_custom_exception_electro = energy_components['alchemically modified BondForce for non-alchemical/alchemical electrostatics exceptions']
+    aa_custom_exception_electro = energy_components['alchemically modified BondForce for alchemical/alchemical electrostatics exceptions']
 
     # Dissect unmodified nonbonded force in alchemical system
     energy_components = dissect_nonbonded_energy(alchemical_system, positions,
                                                  factory.ligand_atomset, platform)
-    unmod_nonalchem_part_sterics, unmod_alchem_part_sterics, unmod_interface_part_sterics,\
-    unmod_nonalchem_part_electro, unmod_alchem_part_electro, unmod_interface_part_electro,\
-    unmod_nonalchem_excep_sterics, unmod_alchem_excep_sterics, unmod_interface_excep_sterics,\
-    unmod_nonalchem_excep_electro, unmod_alchem_excep_electro, unmod_interface_excep_electro = energy_components
+    unmod_nn_particle_sterics, unmod_aa_particle_sterics, unmod_na_particle_sterics,\
+    unmod_nn_particle_electro, unmod_aa_particle_electro, unmod_na_particle_electro,\
+    unmod_nn_exception_sterics, unmod_aa_exception_sterics, unmod_na_exception_sterics,\
+    unmod_nn_exception_electro, unmod_aa_exception_electro, unmod_na_exception_electro = energy_components
 
     # Test that all contribution matches
     # -----------------------------------
 
-    # Check sterics interactions
-    assert_almost_equal(nonalchem_part_sterics, unmod_nonalchem_part_sterics,
-                        'Non-alchemical atoms particle sterics')
-    assert_almost_equal(nonalchem_excep_sterics, unmod_nonalchem_excep_sterics,
-                        'Non-alchemical atoms exceptions sterics')
-    if factory.annihilate_sterics:
-        assert_almost_equal(interface_part_sterics + alchem_part_sterics, custom_alchem_part_sterics,
-                            'Alchemical-all atoms particle sterics')
-        assert_almost_equal(interface_excep_sterics + alchem_excep_sterics, custom_alchem_excep_sterics,
-                            'Alchemical-all atoms exceptions sterics')
-        assert unmod_alchem_excep_sterics == 0.0 * unit.kilojoule_per_mole
-    else:
-        assert_almost_equal(interface_part_sterics, custom_alchem_part_sterics,
-                            'Alchemical-nonalchemical atoms particle sterics')
-        assert_almost_equal(interface_excep_sterics, custom_alchem_excep_sterics,
-                            'Alchemical-nonalchemical atoms exceptions sterics')
-        assert_almost_equal(alchem_part_sterics + alchem_excep_sterics, unmod_alchem_excep_sterics,
-                            'Alchemical atoms particle and exceptions sterics')
-    assert unmod_alchem_part_sterics == 0.0 * unit.kilojoule_per_mole
-    assert unmod_interface_part_sterics == 0.0 * unit.kilojoule_per_mole
-    assert unmod_interface_excep_sterics == 0.0 * unit.kilojoule_per_mole
+    # All contributions from alchemical atoms in unmodified nonbonded force are turned off
+    assert unmod_aa_particle_sterics == 0.0 * unit.kilojoule_per_mole
+    assert unmod_na_particle_sterics == 0.0 * unit.kilojoule_per_mole
+    assert unmod_aa_exception_sterics == 0.0 * unit.kilojoule_per_mole
+    assert unmod_na_exception_sterics == 0.0 * unit.kilojoule_per_mole
+    assert unmod_aa_particle_electro == 0.0 * unit.kilojoule_per_mole
+    assert unmod_na_particle_electro == 0.0 * unit.kilojoule_per_mole
+    assert unmod_aa_exception_electro == 0.0 * unit.kilojoule_per_mole
+    assert unmod_na_exception_electro == 0.0 * unit.kilojoule_per_mole
+
+    # Check sterics interactions match
+    assert_almost_equal(nn_particle_sterics, unmod_nn_particle_sterics,
+                        'Non-alchemical/non-alchemical atoms particle sterics')
+    assert_almost_equal(nn_exception_sterics, unmod_nn_exception_sterics,
+                        'Non-alchemical/non-alchemical atoms exceptions sterics')
+    assert_almost_equal(aa_particle_sterics, aa_custom_particle_sterics,
+                        'Alchemical/alchemical atoms particle sterics')
+    assert_almost_equal(aa_exception_sterics, aa_custom_exception_sterics,
+                        'Alchemical/alchemical atoms exceptions sterics')
+    assert_almost_equal(na_particle_sterics, na_custom_particle_sterics,
+                        'Non-alchemical/alchemical atoms particle sterics')
+    assert_almost_equal(na_exception_sterics, na_custom_exception_sterics,
+                        'Non-alchemical/alchemical atoms exceptions sterics')
 
     # Check electrostatics interactions
-    assert_almost_equal(nonalchem_part_electro, unmod_nonalchem_part_electro,
-                        'Non-alchemical atoms particle electrostatics')
-    assert_almost_equal(nonalchem_excep_electro, unmod_nonalchem_excep_electro,
-                        'Non-alchemical atoms exceptions electrostatics')
-    if factory.annihilate_electrostatics:
-        assert_almost_equal(interface_part_electro + alchem_part_electro, custom_alchem_part_electro,
-                            'Alchemical-all atoms particle electrostatics')
-        assert_almost_equal(interface_excep_electro + alchem_excep_electro, custom_alchem_excep_electro,
-                            'Alchemical-all atoms exceptions electrostatics')
-        assert unmod_alchem_excep_electro == 0.0 * unit.kilojoule_per_mole
-    else:
-        assert_almost_equal(interface_part_electro, custom_alchem_part_electro,
-                            'Alchemical-nonalchemical atoms particle electrostatics')
-        assert_almost_equal(interface_excep_electro, custom_alchem_excep_electro,
-                            'Alchemical-nonalchemical atoms exceptions electrostatics')
-        assert_almost_equal(alchem_part_electro + alchem_excep_electro, unmod_alchem_excep_electro,
-                            'Alchemical atoms particle and exceptions electrostatics')
-    assert unmod_alchem_part_electro == 0.0 * unit.kilojoule_per_mole
-    assert unmod_interface_part_electro == 0.0 * unit.kilojoule_per_mole
-    assert unmod_interface_excep_electro == 0.0 * unit.kilojoule_per_mole
+    assert_almost_equal(nn_particle_electro, unmod_nn_particle_electro,
+                        'Non-alchemical/non-alchemical atoms particle electrostatics')
+    assert_almost_equal(nn_exception_electro, unmod_nn_exception_electro,
+                        'Non-alchemical/non-alchemical atoms exceptions electrostatics')
+    assert_almost_equal(aa_particle_electro, aa_custom_particle_electro,
+                        'Alchemical/alchemical atoms particle electrostatics')
+    assert_almost_equal(aa_exception_electro, aa_custom_exception_electro,
+                        'Alchemical/alchemical atoms exceptions electrostatics')
+    assert_almost_equal(na_particle_electro, na_custom_particle_electro,
+                        'Non-alchemical/alchemical atoms particle electrostatics')
+    assert_almost_equal(na_exception_electro, na_custom_exception_electro,
+                        'Non-alchemical/alchemical atoms exceptions electrostatics')
 
     # TODO check also forces other than nonbonded
 
