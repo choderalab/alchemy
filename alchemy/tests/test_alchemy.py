@@ -146,7 +146,7 @@ def dump_xml(system=None, integrator=None, state=None):
     if state: write_file('state.xml', XmlSerializer.serialize(state))
     return
 
-def compute_energy(system, positions, platform=None, precision=None):
+def compute_energy(system, positions, platform=None, precision=None, force_group=-1):
     timestep = 1.0 * unit.femtoseconds
     integrator = openmm.VerletIntegrator(timestep)
     if platform:
@@ -154,10 +154,31 @@ def compute_energy(system, positions, platform=None, precision=None):
     else:
         context = openmm.Context(system, integrator)
     context.setPositions(positions)
-    state = context.getState(getEnergy=True)
+    state = context.getState(getEnergy=True, groups=force_group)
     potential = state.getPotentialEnergy()
     del context, integrator, state
     return potential
+
+
+def compute_energy_force(system, positions, force_name, platform=None, precision=None):
+    system = copy.deepcopy(system)  # Copy to avoid modifications
+    force_name_index = 1
+    found_force = False
+
+    # Separate force group of force_name from all others.
+    for force in system.getForces():
+        if force.__class__.__name__ == force_name:
+            force.setForceGroup(force_name_index)
+            found_force = True
+        else:
+            force.setForceGroup(0)
+
+    if not found_force:
+        return None
+
+    return compute_energy(system, positions, platform=platform,
+                          precision=precision, force_group=2**force_name_index)
+
 
 def check_waterbox(platform=None, precision=None, nonbondedMethod=openmm.NonbondedForce.CutoffPeriodic):
     """Compare annihilated states in vacuum and a large box.
@@ -555,7 +576,24 @@ def check_interacting_energy_components(factory, positions, platform=None):
     assert_almost_equal(na_exception_electro, na_custom_exception_electro,
                         'Non-alchemical/alchemical atoms exceptions electrostatics')
 
-    # TODO check also forces other than nonbonded
+    # Check forces other than nonbonded
+    # ----------------------------------
+    for force_name in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce', 'GBSAOBCForce']:
+        alchemical_forces_energies = [energy for label, energy in energy_components.items() if force_name in label]
+        reference_force_energy = compute_energy_force(reference_system, positions,
+                                                      force_name, platform=platform)
+
+        # There should be no force in the alchemical system if force_name is missing from the reference
+        if reference_force_energy is None:
+            assert len(alchemical_forces_energies) == 0, str(alchemical_forces_energies)
+            continue
+
+        # Check that the energies match
+        tot_alchemical_forces_energies = 0.0 * energy_unit
+        for energy in alchemical_forces_energies:
+            tot_alchemical_forces_energies += energy
+        assert_almost_equal(reference_force_energy, tot_alchemical_forces_energies,
+                            '{} energy '.format(force_name))
 
 
 def check_noninteracting_energy_components(factory, positions, platform=None):
