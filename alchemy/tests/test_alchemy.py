@@ -476,7 +476,7 @@ def check_interacting_energy_components(factory, positions, platform=None):
         The factory to test.
     positions : simtk.openmm.unit.Quantity of dimension [nparticles,3] with units compatible with Angstroms
         The positions to test.
-    platform : simtk.openmm.Platform
+    platform : simtk.openmm.Platform, optional
         The platform used to compute energies.
 
     """
@@ -558,7 +558,7 @@ def check_interacting_energy_components(factory, positions, platform=None):
     # TODO check also forces other than nonbonded
 
 
-def check_noninteracting_energy_components(factory, positions):
+def check_noninteracting_energy_components(factory, positions, platform=None):
     """Check noninteracting energy components are zero when appropriate.
 
     Parameters
@@ -567,6 +567,8 @@ def check_noninteracting_energy_components(factory, positions):
         The factory to test.
     positions : simtk.openmm.unit.Quantity of dimension [nparticles,3] with units compatible with Angstroms
         The positions to test.
+    platform : simtk.openmm.Platform, optional
+        The platform used to compute energies.
 
     """
     alchemical_state = factory.NoninteractingAlchemicalState()
