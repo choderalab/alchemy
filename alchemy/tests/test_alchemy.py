@@ -574,20 +574,25 @@ def check_noninteracting_energy_components(factory, positions, platform=None):
     alchemical_state = factory.NoninteractingAlchemicalState()
     energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=False)
     energy_unit = unit.kilojoule_per_mole
-    print(energy_components)
 
     def assert_zero_energy(label):
         print('testing %s' % label)
         value = energy_components[label]
         assert abs(value / energy_unit) == 0.0, "''%s' should have zero energy in annihilated alchemical state, but energy is %s" % (label, str(value))
 
-    # Check that alchemical sterics have been annihilated
-    assert_zero_energy('alchemically modified NonbondedForce for sterics')
-    assert_zero_energy('alchemically modified NonbondedForce for sterics exceptions')
+    # Check that non-alchemical/alchemical particle interactions and 1,4 exceptions have been annihilated
+    assert_zero_energy('alchemically modified NonbondedForce for non-alchemical/alchemical sterics')
+    assert_zero_energy('alchemically modified NonbondedForce for non-alchemical/alchemical electrostatics')
+    assert_zero_energy('alchemically modified BondForce for non-alchemical/alchemical sterics exceptions')
+    assert_zero_energy('alchemically modified BondForce for non-alchemical/alchemical electrostatics exceptions')
 
-    # Check that alchemical electrostatics have been annihilated
-    assert_zero_energy('alchemically modified NonbondedForce for electrostatics')
-    assert_zero_energy('alchemically modified NonbondedForce for electrostatics exceptions')
+    # Check that alchemical/alchemical particle interactions and 1,4 exceptions have been annihilated
+    if factory.annihilate_sterics:
+        assert_zero_energy('alchemically modified NonbondedForce for alchemical/alchemical sterics')
+        assert_zero_energy('alchemically modified BondForce for alchemical/alchemical sterics exceptions')
+    if factory.annihilate_electrostatics:
+        assert_zero_energy('alchemically modified NonbondedForce for alchemical/alchemical electrostatics')
+        assert_zero_energy('alchemically modified BondForce for alchemical/alchemical electrostatics exceptions')
 
     # Check valence terms
     for force_name in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce', 'GBSAOBCForce']:
