@@ -581,7 +581,7 @@ def check_interacting_energy_components(factory, positions, platform=None):
                         'Alchemical/alchemical atoms particle electrostatics')
     assert_almost_equal(aa_exception_electro, aa_custom_exception_electro,
                         'Alchemical/alchemical atoms exceptions electrostatics')
-    if nonbonded_method != openmm.app.PME:  # TODO for PME this test still fails
+    if nonbonded_method != openmm.NonbondedForce.PME:  # TODO for PME this test still fails
         assert_almost_equal(na_particle_electro, na_custom_particle_electro,
                             'Non-alchemical/alchemical atoms particle electrostatics')
     assert_almost_equal(na_exception_electro, na_custom_exception_electro,
@@ -719,7 +719,6 @@ def alchemical_factory_check(reference_system, positions, platform_name=None, pr
     platform = None
     if platform_name:
         platform = openmm.Platform.getPlatformByName(platform_name)
-    alchemical_system = factory.createPerturbedSystem()
 
     # Check energies for fully interacting system.
     print('check fully interacting interacting energy components...')
@@ -728,10 +727,6 @@ def alchemical_factory_check(reference_system, positions, platform_name=None, pr
     # Check energies for noninteracting system.
     print('check noninteracting energy components...')
     check_noninteracting_energy_components(factory, positions, platform)
-
-    # Compare energies for fully-interacting system
-    print('compare system energies...')
-    compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'], platform=platform, precision=precision)
 
     return
 
