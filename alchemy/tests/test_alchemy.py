@@ -191,7 +191,6 @@ def check_waterbox(platform=None, precision=None, nonbondedMethod=openmm.Nonbond
     """Compare annihilated states in vacuum and a large box.
     """
     platform_name = platform.getName()
-    from openmmtools import testsystems
     testsystem = testsystems.WaterBox()
     system = testsystem.system
     positions = testsystem.positions
@@ -276,7 +275,6 @@ def compare_platforms(system, positions, factory_args=dict()):
 def test_denihilated_states(platform_name=None, precision=None):
     """Compare annihilated electrostatics / decoupled sterics states in vacuum and a large box.
     """
-    from openmmtools import testsystems
     testsystem = testsystems.TolueneVacuum()
     vacuum_system = testsystem.system
     positions = testsystem.positions
@@ -1249,7 +1247,6 @@ def test_softcore_parameters():
     """
     Testing softcore parameters
     """
-    alchemical_functions = { 'lambda_sterics' : 'lambda', 'lambda_electrostatics' : 'lambda', 'lambda_bonds' : 'lambda', 'lambda_angles' : 'lambda', 'lambda_torsions' : 'lambda' }
     name = 'Lennard-Jones fluid with dispersion correction'
     test_system = copy.deepcopy(test_systems[name])
     reference_system = test_system['test'].system
