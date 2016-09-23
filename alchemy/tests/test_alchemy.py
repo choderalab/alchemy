@@ -1108,10 +1108,6 @@ overlap_testsystem_names = [
     'toluene in implicit solvent',
 ]
 
-# DEBUG
-accuracy_testsystem_names = list()
-overlap_testsystem_names = list()
-
 test_systems = dict()
 
 # Generate host-guest test systems combinatorially.
