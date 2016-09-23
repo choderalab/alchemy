@@ -146,10 +146,17 @@ def dump_xml(system=None, integrator=None, state=None):
     if state: write_file('state.xml', XmlSerializer.serialize(state))
     return
 
+
 def compute_energy(system, positions, platform=None, precision=None, force_group=-1):
     timestep = 1.0 * unit.femtoseconds
     integrator = openmm.VerletIntegrator(timestep)
     if platform:
+        platform_name = platform.getName()
+        if precision:
+            if platform_name == 'CUDA':
+                platform.setDefaultPropertyValue('CudaPrecision', precision)
+            elif platform_name == 'OpenCL':
+                platform.setDefaultPropertyValue('OpenCLPrecision', precision)
         context = openmm.Context(system, integrator, platform)
     else:
         context = openmm.Context(system, integrator)
