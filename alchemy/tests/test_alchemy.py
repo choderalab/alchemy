@@ -183,8 +183,10 @@ def compute_energy_force(system, positions, force_name, platform=None, precision
     if not found_force:
         return None
 
-    return compute_energy(system, positions, platform=platform,
-                          precision=precision, force_group=2**force_name_index)
+    force_energy = compute_energy(system, positions, platform=platform,
+                                  precision=precision, force_group=2**force_name_index)
+    del system
+    return force_energy
 
 
 def check_waterbox(platform=None, precision=None, nonbondedMethod=openmm.NonbondedForce.CutoffPeriodic):
