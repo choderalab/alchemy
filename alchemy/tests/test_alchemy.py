@@ -516,6 +516,7 @@ def check_interacting_energy_components(factory, positions, platform=None):
             nonbonded_method = force.getNonbondedMethod()
 
     # Get energy components of reference system's nonbonded force
+    logger.info("Dissecting reference system's nonbonded force")
     energy_components = dissect_nonbonded_energy(reference_system, positions,
                                                  factory.ligand_atomset, platform)
     nn_particle_sterics, aa_particle_sterics, na_particle_sterics,\
@@ -524,6 +525,7 @@ def check_interacting_energy_components(factory, positions, platform=None):
     nn_exception_electro, aa_exception_electro, na_exception_electro = energy_components
 
     # Dissect unmodified nonbonded force in alchemical system
+    logger.info("Dissecting alchemical system's unmodified nonbonded force")
     energy_components = dissect_nonbonded_energy(alchemical_system, positions,
                                                  factory.ligand_atomset, platform)
     unmod_nn_particle_sterics, unmod_aa_particle_sterics, unmod_na_particle_sterics,\
@@ -532,6 +534,7 @@ def check_interacting_energy_components(factory, positions, platform=None):
     unmod_nn_exception_electro, unmod_aa_exception_electro, unmod_na_exception_electro = energy_components
 
     # Get alchemically-modified energy components
+    logger.info("Computing alchemical system components energies")
     alchemical_state = factory.FullyInteractingAlchemicalState()
     energy_components = factory.getEnergyComponents(alchemical_state, positions, use_all_parameters=False)
     na_custom_particle_sterics = energy_components['alchemically modified NonbondedForce for non-alchemical/alchemical sterics']
