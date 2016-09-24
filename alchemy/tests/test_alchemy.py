@@ -1272,6 +1272,7 @@ def test_overlap():
         f.description = "Testing reference/alchemical overlap for %s..." % name
         yield f
 
+@attr('slow')
 def test_alchemical_accuracy():
     """
     Generate nose tests for overlap for all alchemical test systems.
