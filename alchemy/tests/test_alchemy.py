@@ -1087,7 +1087,7 @@ accuracy_testsystem_names = [
     'TIP3P with reaction field, no charges, no switch, no dispersion correction',
     'TIP3P with reaction field, switch, no dispersion correction',
     'TIP3P with reaction field, switch, dispersion correction',
-    'alanine dipeptide in vacuum with annihilated sterics',
+    # 'alanine dipeptide in vacuum with annihilated sterics',  TODO temporarily deactivated until openmm#1554 gets fixed
     'toluene in implicit solvent',
 ]
 
