@@ -36,6 +36,10 @@ systems = factory.createPerturbedSystems(protocol)
 
 ## Changelog
 
+### 1.3 - Overhaul exceptions and testing
+This version overhauls the way exceptions are handled, fixing a variety of issues present in earlier versions.
+More thorough testing of fully-interacting and non-interacting systems is implemented, though not all tests run on travis.
+
 ### 1.2 - Expose softcore parameters as context parameters
 Alchemical softcore parameters are now exposed as context parameters, and can be tweaked on the fly.
 The default selection of softcore c was also changed.
