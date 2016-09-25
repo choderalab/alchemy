@@ -36,7 +36,7 @@ systems = factory.createPerturbedSystems(protocol)
 
 ## Changelog
 
-### 1.3 - Overhaul exceptions and testing
+### 1.2.1 - Critical bugfix release and overhaul of exceptions and testing
 This version overhauls the way exceptions are handled, fixing a variety of issues present in earlier versions.
 More thorough testing of fully-interacting and non-interacting systems is implemented, though not all tests run on travis.
 
