@@ -1802,3 +1802,129 @@ class AbsoluteAlchemicalFactory(object):
             return True
 
         return False
+
+class AlchemicalSystemEnergyComparitor(object)
+    """
+    Tool to take an arbitrary number of reference and AbsoluteAlchemicalFactory generated system and compare the energies of the nonbonded energies
+    """
+
+    def __init__(self, reference_system, *args, system_names=[]):
+        self.reference_system = copy.deepcopy(reference_system)
+        self.extra_systems = tuple(copy.deepcopy(arg) for arg in args if isinstance(arg,openmm.System))
+        self.system_names = []
+        for i range(len(self.extra_systems)):
+            try:
+                self.system_names.append(system_names[i])
+            except:
+                self.system_names.append("System{0}".format(i))
+        self._has_split_energies = False
+
+    @propery
+    def systems(self):
+        systems = {name:system for name, system in zip(self.extra_systems, self.system_names)
+        systems['reference'] = self.reference_system
+        return systems
+
+    @staticmethod
+    def compareEnergies(contexts, positions, box_vectors=None):
+        if positions.ndim == 3:
+            iterations = positions.shape[0]
+        else:
+            iterations = 1
+            positions = np.expand_dims(positions, axis=0)
+        if box_vectors is not None:
+            if box_vectors.ndim == 2:
+                const_box = True
+            else:
+                const_box = False
+        try:
+            ncontexts = len(contexts)
+        except:
+            ncontexts = 1
+            contexts = [contexts]
+        # Set up the energy decomposed outputs
+        energies = np.zeros([ncontexts, niterations], 
+           dtype=[('all_energy', 'float32')
+                  ('ForceGroup0', 'float32')
+                  ('non_alchemical_sterics','float32'), 
+                  ('non_alchemical_electrostatics','float32'),
+                  ('alchemical_sterics','float32'),
+                  ('alchemical__electrostatics','float32')
+                 ])
+        # Set up force group map
+        force_group_map = {'all_energy':-1, 'ForceGroup0':2**0, 
+                           'non_alchemical_sterics':2**1, 'non_alchemical_electrostatics':2**2,
+                           'alchemical_sterics':2**3, 'alchemical__electrostatics':2**4}
+        for icontext in range(ncontexts):
+            context = contexts[icontext]
+            for ipos in range(iterations):
+                positions = positions[ipos]
+                context.setPositions(positions)
+                if box_vectors is not None:
+                    if const_box:
+                        box = box_vectors[ipos]
+                    else:
+                        box = box_vectors
+                    context.setPeriodicBoxVectors(box[0,:], box[1,:], box[2,:])
+                for force_key in force_group_map.keys():
+                    energy = context.getState(getEnergy=True, groups=force_group_map[key]).getPotentialEnergy() / unit.kilojoules_per_mole
+                    energies[icontext,ipos][key] = energy
+
+        return energies
+
+    def splitNonbondedForcesToGroups(self):
+        """
+        Split the nonbonded forces into electrostatic and steric contributions based on force groups
+
+        Standard nonbonded forces will be split into groups 1,2 for steric,electrostatic respectivley
+        Alchemical (Cutsom(Non)bondedForces) will be split into 3 and 4 respectivley
+        Grouop 0 will be left for all forces not Nonboned
+        """
+      
+        if self._has_split_energies:
+            print("Energies have already been split!")
+            return
+
+        for system in self.systems.values():
+            for iforce in range(system.getNumForces()):
+                force = system.getForce(iforce)
+                # Check for standard Nonbonded force
+                if isinstance(force, openmm.NonbondedForce):
+                    electro_NB_force = copy.deepcopy(force)
+                    for particle in range(force.getNumParticles):
+                        [charge, sigma, epsilon] = force.getParticleParameters(particle)
+                        force.setParticleParameters(particle, 0, sigma, epsilon)
+                        electro_NB_force.setParticleParameters(particle, charge, sigma, 0)
+                    for exception in range(force.getNumExceptions):
+                        [particle1, particle2, chargeprod, sigma, epsilon] = force.getExceptionParameters(exception)
+                        force.setExceptionParameters(exception, particle1, particle2, 0, sigma, epsilon)
+                        electro_NB_force.setExceptionParameters(exception, particle1, particle2, chargeprod, sigma, exception)
+                    force.setForceGroup(1)
+                    electro_NB_force.setForceGroup(2)
+                    system.addForce(electro_NB_force)
+                # Check for alchemical NB forces, including NB force
+                if isinstance(force, openmm.CustomNonbondedForce) or isinstance(force, openmmCustomBondForce):
+                    energy_expression = force.getEnergyExpression()
+                    if "U_sterics" in energy_expression:
+                        force.setForceGroup(3)
+                    if "U_electrostatics" in energy_expression:
+                        force.setForceGroup(4)
+    
+    def combineNonbondedForceToGroup(self, group=0)
+       """
+       Put all Nonbonded forces into a single ForceGroup
+
+       Effectivley the reverse of splitNonbondedForcesToGroups
+
+       Paramters:
+       ----------
+       system : simtk.openmm.System system containing all force objects already assigned
+           Can be either standard OpenMM system or one constructed from AbsoluteAlchemicalFactory
+       group : integer, optional. The force group to put all forces in.
+          Defaults to 0, but can be any integer <= 31
+       """
+       if not self._has_split_energies:
+           print("Enegies are not split!")
+           return
+
+       return system
