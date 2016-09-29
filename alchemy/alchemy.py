@@ -1803,25 +1803,32 @@ class AbsoluteAlchemicalFactory(object):
 
         return False
 
-class AlchemicalSystemEnergyComparitor(object)
+class AlchemicalSystemEnergyComparitor(object):
     """
     Tool to take an arbitrary number of reference and AbsoluteAlchemicalFactory generated system and compare the energies of the nonbonded energies
     """
 
-    def __init__(self, reference_system, *args, system_names=[]):
+    def __init__(self, reference_system, *args, **kwargs):
+        # Class disabled until there is time to generalize the problem
+        raisestring =  "This Class has not yet been implemented or test.\n"
+        raisestring += "Some of the code is currently copied into tests.\n"
+        raisestring += "Primary functions are only templates for now."
+        raise Exception(raisestring)
+
         self.reference_system = copy.deepcopy(reference_system)
         self.extra_systems = tuple(copy.deepcopy(arg) for arg in args if isinstance(arg,openmm.System))
         self.system_names = []
-        for i range(len(self.extra_systems)):
+        for i in range(len(self.extra_systems)):
             try:
+                system_names = kwargs['system_names']
                 self.system_names.append(system_names[i])
             except:
                 self.system_names.append("System{0}".format(i))
         self._has_split_energies = False
 
-    @propery
+    @property
     def systems(self):
-        systems = {name:system for name, system in zip(self.extra_systems, self.system_names)
+        systems = {name:system for name, system in zip(self.extra_systems, self.system_names)}
         systems['reference'] = self.reference_system
         return systems
 
@@ -1910,7 +1917,7 @@ class AlchemicalSystemEnergyComparitor(object)
                     if "U_electrostatics" in energy_expression:
                         force.setForceGroup(4)
     
-    def combineNonbondedForceToGroup(self, group=0)
+    def combineNonbondedForceToGroup(self, group=0):
        """
        Put all Nonbonded forces into a single ForceGroup
 
