@@ -827,7 +827,7 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
 
     return delta
 
-def overlap_check(reference_system, positions, platform_name=None, precision=None, nsteps=50, nsamples=200, factory_args=None, cached_trajectory_filename=None):
+def overlap_check(reference_system, positions, box_vectors=None, platform_name=None, precision=None, nsteps=50, nsamples=200, factory_args=None, cached_trajectory_filename=None, save_figures=False, show_figures=False, return_energies=False):
     """
     Test overlap between reference system and alchemical system by running a short simulation.
 
@@ -837,6 +837,8 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
        The reference System object to compare with
     positions : simtk.unit.Quantity with units compatible with nanometers
        The positions to assess energetics for.
+    box_vectors : simtk.unit.Quantity with units compatible with nanometers
+       The initial box vectros to pass into the context
     platform_name : str, optional, default=None
        The name of the platform to use for benchmarking.
     nsteps : int, optional, default=50
@@ -847,7 +849,12 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
        Arguments passed to AbsoluteAlchemicalFactory.
     cached_trajectory_filename : str, optional, default=None
        If specified, attempt to cache (or reuse) trajectory.
-
+    save_figures : bool, optional, default=False
+        Save the figures showing the differences in energy if possible
+    show_figures : bool, optional, default=False
+        Render the figures in X window at runtime showing the differences in energhy
+    return_energies : bool, optional, default=False
+        Return the energies matrix
     """
 
     # Create a fully-interacting alchemical state.
@@ -855,10 +862,53 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
     alchemical_state = AlchemicalState()
     alchemical_system = factory.createPerturbedSystem(alchemical_state)
 
+    # Create an expanded cutoff fully-interacting alchemical state
+    expanded_system = copy.deepcopy(reference_system)
+    for force in expanded_system.getForces():
+        try:
+           expanded_cutoff = force.getCutoffDistance() * (1 + 1.0/3)
+           force.setCutoffDistance(expanded_cutoff)
+        except:
+           pass
+
     temperature = 300.0 * unit.kelvin
     collision_rate = 5.0 / unit.picoseconds
     timestep = 2.0 * unit.femtoseconds
     kT = (kB * temperature)
+
+    def splitNonbondedForcesToGroups(system):
+        """
+        Split the nonbonded forces into electrostatic and steric contributions based on force groups
+
+        Standard nonbonded forces will be split into groups 1,2 for steric,electrostatic respectivley
+        Alchemical (Cutsom(Non)bondedForces) will be split into 3 and 4 respectivley
+        Grouop 0 will be left for all forces not Nonboned
+        """
+        for force in system.getForces():
+            # Check for standard Nonbonded force
+            if isinstance(force, openmm.NonbondedForce):
+                electro_NB_force = copy.deepcopy(force)
+                for particle in range(force.getNumParticles()):
+                    [charge, sigma, epsilon] = force.getParticleParameters(particle)
+                    force.setParticleParameters(particle, 0, sigma, epsilon)
+                    electro_NB_force.setParticleParameters(particle, charge, sigma, 0)
+                for exception in range(force.getNumExceptions()):
+                    [particle1, particle2, chargeprod, sigma, epsilon] = force.getExceptionParameters(exception)
+                    force.setExceptionParameters(exception, particle1, particle2, 0, sigma, epsilon)
+                    electro_NB_force.setExceptionParameters(exception, particle1, particle2, chargeprod, sigma, 0)
+                force.setForceGroup(1)
+                electro_NB_force.setForceGroup(2)
+                system.addForce(electro_NB_force)
+            # Check for alchemical NB forces, including NB force
+            if isinstance(force, openmm.CustomNonbondedForce) or isinstance(force, openmm.CustomBondForce):
+                energy_expression = force.getEnergyFunction()
+                if "U_sterics" in energy_expression:
+                    force.setForceGroup(3)
+                if "U_electrostatics" in energy_expression:
+                    force.setForceGroup(4)
+    
+    for system in [reference_system, alchemical_system, expanded_system]:
+        splitNonbondedForcesToGroups(system)
 
     # Select platform.
     platform = None
@@ -868,14 +918,25 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
     # Create integrators.
     reference_integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     alchemical_integrator = openmm.VerletIntegrator(timestep)
+    expanded_integrator = openmm.VerletIntegrator(timestep)
 
     # Create contexts.
     if platform:
         reference_context = openmm.Context(reference_system, reference_integrator, platform)
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator, platform)
+        expanded_context = openmm.Context(expanded_system, expanded_integrator, platform)
     else:
         reference_context = openmm.Context(reference_system, reference_integrator)
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator)
+        expanded_context = openmm.Context(expanded_system, expanded_integrator)
+
+    # Book keeping
+    index_names = ("Reference", "Lambda=1", "Expanded")
+    contexts = (reference_context, alchemical_context, expanded_context)
+
+    if box_vectors is not None:
+        for context in contexts:
+            context.setPeriodicBoxVectors(box_vectors[0,:], box_vectors[1,:], box_vectors[2,:])
 
     ncfile = None
     if cached_trajectory_filename:
@@ -896,7 +957,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
             # If anything went wrong, create a new cache.
             try:
                 (pathname, filename) = os.path.split(cached_trajectory_filename)
-                if not os.path.exists(pathname): os.makedirs(pathname)
+                if not os.path.exists(pathname) and pathname is not '': os.makedirs(pathname)
                 ncfile = Dataset(cached_trajectory_filename, 'w', format='NETCDF4')
                 ncfile.createDimension('samples', 0)
                 ncfile.createDimension('atoms', reference_system.getNumParticles())
@@ -909,7 +970,19 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
 
     # Collect simulation data.
     reference_context.setPositions(positions)
-    du_n = np.zeros([nsamples], np.float64) # du_n[n] is the
+    # Set up the energy decomposed outputs
+    energies = np.zeros([3, nsamples], 
+       dtype=[('all_energy', 'float64'),
+              ('ForceGroup0', 'float64'),
+              ('non_alchemical_sterics','float64'), 
+              ('non_alchemical_electrostatics','float64'),
+              ('alchemical_sterics','float64'),
+              ('alchemical_electrostatics','float64')
+             ])
+    # Set up force group map
+    force_group_map = {'all_energy':-1, 'ForceGroup0':2**0, 
+                       'non_alchemical_sterics':2**1, 'non_alchemical_electrostatics':2**2,
+                       'alchemical_sterics':2**3, 'alchemical_electrostatics':2**4}
     print()
     import click
     with click.progressbar(range(nsamples)) as bar:
@@ -928,39 +1001,123 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
             if np.isnan(reference_potential/kT):
                 raise Exception("Reference potential is NaN")
 
-            # Get alchemical energies.
-            alchemical_context.setPositions(reference_state.getPositions(asNumpy=True))
-            alchemical_state = alchemical_context.getState(getEnergy=True)
-            alchemical_potential = alchemical_state.getPotentialEnergy()
-            if np.isnan(alchemical_potential/kT):
-                raise Exception("Alchemical potential is NaN")
-
-            du_n[sample] = (alchemical_potential - reference_potential) / kT
+            # Assign energies to groups
+            for index, context in enumerate(contexts):
+                # Assign Positions
+                context.setPositions(reference_state.getPositions(asNumpy=True))
+                for force_key in force_group_map.keys():
+                    context_state = context.getState(getEnergy = True, groups=force_group_map[force_key])
+                    potential = context_state.getPotentialEnergy()/kT
+                    if np.isnan(potential):
+                        raise Exception("Potential in context is NaN!")
+                    energies[index, sample][force_key] = context_state.getPotentialEnergy()/kT
 
             if cached_trajectory_filename and (cache_mode == 'write') and (ncfile is not None):
                 ncfile.variables['positions'][sample,:,:] = reference_state.getPositions(asNumpy=True) / unit.nanometers
 
     # Clean up.
-    del reference_context, alchemical_context
+    del reference_context, alchemical_context, expanded_context
     if cached_trajectory_filename and (ncfile is not None):
         ncfile.close()
 
-    # Discard data to equilibration and subsample.
+    # Do pairwise energy difference analysis:
     from pymbar import timeseries
-    [t0, g, Neff] = timeseries.detectEquilibration(du_n)
-    indices = timeseries.subsampleCorrelatedData(du_n, g=g)
-    du_n = du_n[indices]
-
-    # Compute statistics.
+    nsystems = len(index_names)
+    npairs = nsystems*(nsystems-1)/2
     from pymbar import EXP
-    [DeltaF, dDeltaF] = EXP(du_n)
+    report = ""
+    # Try to make matplotlib figures
+    try:
+        import matplotlib.pyplot as plt
+        full_u_figure, full_u_plots = plt.subplots(npairs,1)
+        decomp_u_figure, decomp_u_plots = plt.subplots(npairs,2)
+        plot_index = 0
+    except: pass
+    for i in range(nsystems):
+        namei = index_names[i]
+        for j in range(i+1, nsystems):
+            namej = index_names[j]
+            # Get dU
+            du_n = energies[i,:]['all_energy'] - energies[j,:]['all_energy']
+            [t0, g, Neff] = timeseries.detectEquilibration(du_n)
+            indices = timeseries.subsampleCorrelatedData(du_n, g=g)
+            du_n = du_n[indices]
+            [DeltaF, dDeltaF] = EXP(du_n)
+            # Raise an exception if the error is larger than 3kT.
+            MAX_DEVIATION = 3.0 # kT
+            if (dDeltaF > MAX_DEVIATION):
+                report += "{0:s}-{1:s} DeltaF = {2:12.3f} +- {3:12.3f} kT ({4:5d} samples, g = {5:6.1f})\n".format(namei, namej, DeltaF, dDeltaF, Neff, g)
+            try:
+                full_u_i = energies[i,:]['all_energy']
+                full_u_j = energies[i,:]['all_energy']
+                # Configure the full energy scatter plot
+                axmin = min(full_u_i.min(), full_u_j.min() )
+                axmax = max(full_u_i.max(), full_u_j.max() )
+                xy = [axmin, axmax]
+                full_u_plots[plot_index].scatter(full_u_i, full_u_j, marker="o", c="None")
+                full_u_plots[plot_index].plot(xy, xy, '-k')
+                full_u_plots[plot_index].set_xlim(xy)
+                full_u_plots[plot_index].set_ylim(xy)
+                full_u_plots[plot_index].set_xlabel(namei)
+                full_u_plots[plot_index].set_ylabel(namej)
+                # Configure the Sterics Plot
+                sterics_u_i = energies[i,:]['non_alchemical_sterics'] + energies[i,:]['alchemical_sterics']
+                sterics_u_j = energies[j,:]['non_alchemical_sterics'] + energies[j,:]['alchemical_sterics']
+                axmin = min(sterics_u_i.min(), sterics_u_j.min() )
+                axmax = max(sterics_u_i.max(), sterics_u_j.max() )
+                xy = [axmin, axmax]
+                decomp_u_plots[plot_index,0].scatter(sterics_u_i, sterics_u_j, marker="o", c="red")
+                decomp_u_plots[plot_index,0].plot(xy, xy, '-k')
+                decomp_u_plots[plot_index,0].set_xlim(xy)
+                decomp_u_plots[plot_index,0].set_ylim(xy)
+                decomp_u_plots[plot_index,0].set_xlabel(namei)
+                decomp_u_plots[plot_index,0].set_ylabel(namej)
+                # Configure the Electrostatics Plot
+                electrostatics_u_i = energies[i,:]['non_alchemical_electrostatics'] + energies[i,:]['alchemical_electrostatics']
+                electrostatics_u_j = energies[j,:]['non_alchemical_electrostatics'] + energies[j,:]['alchemical_electrostatics']
+                axmin = min(electrostatics_u_i.min(), electrostatics_u_j.min() )
+                axmax = max(electrostatics_u_i.max(), electrostatics_u_j.max() )
+                xy = [axmin, axmax]
+                decomp_u_plots[plot_index,1].scatter(electrostatics_u_i, electrostatics_u_j, marker="o", c="blue")
+                decomp_u_plots[plot_index,1].plot(xy, xy, '-k')
+                decomp_u_plots[plot_index,1].set_xlim(xy)
+                decomp_u_plots[plot_index,1].set_ylim(xy)
+                decomp_u_plots[plot_index,1].set_xlabel(namei)
+                decomp_u_plots[plot_index,1].set_ylabel(namej)
+                plot_index += 1
+            except: pass
 
-    # Raise an exception if the error is larger than 3kT.
-    MAX_DEVIATION = 3.0 # kT
-    if (dDeltaF > MAX_DEVIATION):
-        report = "DeltaF = %12.3f +- %12.3f kT (%5d samples, g = %6.1f)" % (DeltaF, dDeltaF, Neff, g)
-        raise Exception(report)
+    if report != "":
+        print(report)
+    # Finalize Figures
+    try:
+        full_u_figure.suptitle("Full Potential Energy Parwise Comparison")
+        decomp_u_figure.suptitle("Sterics (left) and Electro (right)\nPotential Energy Parwise Comparison")
+        if save_figures:
+            full_u_figure.save('full_potential.png', bbox_inches='tight')
+            decomp_u_figure.save('decomposed_potential.png', bbox_inches='tight')
+        if show_figures:
+            plt.show()
+    except: pass
+        
+    ## Discard data to equilibration and subsample.
+    #from pymbar import timeseries
+    #[t0, g, Neff] = timeseries.detectEquilibration(du_n)
+    #indices = timeseries.subsampleCorrelatedData(du_n, g=g)
+    #du_n = du_n[indices]
 
+    ## Compute statistics.
+    #from pymbar import EXP
+    #[DeltaF, dDeltaF] = EXP(du_n)
+
+    ## Raise an exception if the error is larger than 3kT.
+    #MAX_DEVIATION = 3.0 # kT
+    #if (dDeltaF > MAX_DEVIATION):
+    #    report = "DeltaF = %12.3f +- %12.3f kT (%5d samples, g = %6.1f)" % (DeltaF, dDeltaF, Neff, g)
+    #    raise Exception(report)
+
+    if return_energies:
+        return energies
     return
 
 def rstyle(ax):

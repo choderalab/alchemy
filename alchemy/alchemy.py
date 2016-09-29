@@ -1898,14 +1898,14 @@ class AlchemicalSystemEnergyComparitor(object):
                 # Check for standard Nonbonded force
                 if isinstance(force, openmm.NonbondedForce):
                     electro_NB_force = copy.deepcopy(force)
-                    for particle in range(force.getNumParticles):
+                    for particle in range(force.getNumParticles()):
                         [charge, sigma, epsilon] = force.getParticleParameters(particle)
                         force.setParticleParameters(particle, 0, sigma, epsilon)
                         electro_NB_force.setParticleParameters(particle, charge, sigma, 0)
-                    for exception in range(force.getNumExceptions):
+                    for exception in range(force.getNumExceptions()):
                         [particle1, particle2, chargeprod, sigma, epsilon] = force.getExceptionParameters(exception)
                         force.setExceptionParameters(exception, particle1, particle2, 0, sigma, epsilon)
-                        electro_NB_force.setExceptionParameters(exception, particle1, particle2, chargeprod, sigma, exception)
+                        electro_NB_force.setExceptionParameters(exception, particle1, particle2, chargeprod, sigma, 0)
                     force.setForceGroup(1)
                     electro_NB_force.setForceGroup(2)
                     system.addForce(electro_NB_force)
