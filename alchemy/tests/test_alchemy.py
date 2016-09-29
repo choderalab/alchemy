@@ -866,10 +866,17 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
     expanded_system = copy.deepcopy(reference_system)
     for force in expanded_system.getForces():
         try:
-           expanded_cutoff = force.getCutoffDistance() * (1 + 1.0/3)
+           base_cutoff = force.getCutoffDistance()
+           expanded_cutoff = base_cutoff * (1 + 1.0/3)
            force.setCutoffDistance(expanded_cutoff)
         except:
            pass
+
+    try:
+        print("Base Cutoff: {0} nm".format(base_cutoff / unit.nanometer))
+        print("Expanded Cutoff: {0} nm".format(expanded_cutoff / unit.nanometer))
+    except: pass
+    
 
     temperature = 300.0 * unit.kelvin
     collision_rate = 5.0 / unit.picoseconds
