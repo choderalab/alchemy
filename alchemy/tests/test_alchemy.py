@@ -827,7 +827,7 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
 
     return delta
 
-def overlap_check(reference_system, positions, box_vectors=None, platform_name=None, precision=None, nsteps=50, nsamples=200, factory_args=None, cached_trajectory_filename=None):
+def overlap_check(reference_system, positions, platform_name=None, precision=None, nsteps=50, nsamples=200, factory_args=None, cached_trajectory_filename=None):
     """
     Test overlap between reference system and alchemical system by running a short simulation.
 
@@ -837,13 +837,11 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
        The reference System object to compare with
     positions : simtk.unit.Quantity with units compatible with nanometers
        The positions to assess energetics for.
-    box_vectors: simtk.unit.Quantity, optional, with units compatable with nanometers
-       The box vectros will be passed into Context and used to compute energies and size of cutoff
     platform_name : str, optional, default=None
        The name of the platform to use for benchmarking.
     nsteps : int, optional, default=50
        Number of molecular dynamics steps between samples.
-    nsamples : int, optional, default=200
+    nsamples : int, optional, default=100
        Number of samples to collect.
     factory_args : dict(), optional, default=None
        Arguments passed to AbsoluteAlchemicalFactory.
@@ -857,23 +855,10 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
     alchemical_state = AlchemicalState()
     alchemical_system = factory.createPerturbedSystem(alchemical_state)
 
-    # Create a fully interacting reference state with a larger cutoff
-    expanded_system = copy.deepcopy(reference_system)
-    for iforce in range(expanded_system.getNumForces()):
-        force = expanded_system.getForce(iforce)
-        if isinstance(force, openmm.NonbondedForce):
-            expanded_cutoff = force.getCutoffDistance() * 1.2
-            force.setCutoffDistance(expanded_cutoff)
-
     temperature = 300.0 * unit.kelvin
     collision_rate = 5.0 / unit.picoseconds
     timestep = 2.0 * unit.femtoseconds
     kT = (kB * temperature)
-
-    # Create alchemical force compariotr
-    comparitor = AlchemicalSystemEnergyComparitor(reference_system, alchemical_system, expanded_system, system_names=['alchemical', 'expanded'])
-    comparitor.splitNonbondedForcesToGroups()
-    systems = comparitor.systems
 
     # Select platform.
     platform = None
@@ -883,17 +868,14 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
     # Create integrators.
     reference_integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     alchemical_integrator = openmm.VerletIntegrator(timestep)
-    expanded_integrator = openmm.VerletIntegrator(timestep)
 
     # Create contexts.
     if platform:
-        reference_context = openmm.Context(systems['reference'], reference_integrator, platform)
-        alchemical_context = openmm.Context(systems['alchemical'], alchemical_integrator, platform)
-        expanded_context = openmm.Context(systems['expanded'], expanded_integrator, platform)
+        reference_context = openmm.Context(reference_system, reference_integrator, platform)
+        alchemical_context = openmm.Context(alchemical_system, alchemical_integrator, platform)
     else:
-        reference_context = openmm.Context(systems['reference'], reference_integrator)
-        alchemical_context = openmm.Context(systems['alchemical'], alchemical_integrator)
-        expanded_context = openmm.Context(systems['expanded'], expanded_integrator)
+        reference_context = openmm.Context(reference_system, reference_integrator)
+        alchemical_context = openmm.Context(alchemical_system, alchemical_integrator)
 
     ncfile = None
     if cached_trajectory_filename:
@@ -927,8 +909,7 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
 
     # Collect simulation data.
     reference_context.setPositions(positions)
-    context_list = [reference_context, alchemical_context, expanded_context]
-    du_n = np.zeros([nsamples], np.float64)
+    du_n = np.zeros([nsamples], np.float64) # du_n[n] is the
     print()
     import click
     with click.progressbar(range(nsamples)) as bar:
@@ -942,21 +923,19 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
                 reference_integrator.step(nsteps)
 
             # Get reference energies.
-            reference_state = reference_context.getState(getPositions=True)
-            positions = reference_state.getPositions(asNumpy=True)
-            energies = comparitor(context_list, positions)
-            #reference_potential = reference_state.getPotentialEnergy()
-            #if np.isnan(reference_potential/kT):
-            #    raise Exception("Reference potential is NaN")
-            #
-            ## Get alchemical energies.
-            #alchemical_context.setPositions(reference_state.getPositions(asNumpy=True))
-            #alchemical_state = alchemical_context.getState(getEnergy=True)
-            #alchemical_potential = alchemical_state.getPotentialEnergy()
-            #if np.isnan(alchemical_potential/kT):
-            ##    raise Exception("Alchemical potential is NaN")
-            # 
-            #du_n[sample] = (alchemical_potential - reference_potential) / kT
+            reference_state = reference_context.getState(getEnergy=True, getPositions=True)
+            reference_potential = reference_state.getPotentialEnergy()
+            if np.isnan(reference_potential/kT):
+                raise Exception("Reference potential is NaN")
+
+            # Get alchemical energies.
+            alchemical_context.setPositions(reference_state.getPositions(asNumpy=True))
+            alchemical_state = alchemical_context.getState(getEnergy=True)
+            alchemical_potential = alchemical_state.getPotentialEnergy()
+            if np.isnan(alchemical_potential/kT):
+                raise Exception("Alchemical potential is NaN")
+
+            du_n[sample] = (alchemical_potential - reference_potential) / kT
 
             if cached_trajectory_filename and (cache_mode == 'write') and (ncfile is not None):
                 ncfile.variables['positions'][sample,:,:] = reference_state.getPositions(asNumpy=True) / unit.nanometers
