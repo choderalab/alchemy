@@ -931,7 +931,9 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
         expanded_context = openmm.Context(expanded_system, expanded_integrator)
 
     # Book keeping
-    index_names = ("Reference", "Lambda=1", "Expanded")
+    index_names = ("Reference ", 
+                   "Lambda = 1", 
+                   "Expanded  ")
     contexts = (reference_context, alchemical_context, expanded_context)
 
     if box_vectors is not None:
@@ -1026,6 +1028,9 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
     npairs = nsystems*(nsystems-1)/2
     from pymbar import EXP
     report = ""
+    variance_report =  "           Mean and Variance of Delta U broken down by type, in kT and (kT)^2           \n"
+    variance_report += "========================================================================================\n"
+    variance_report += "                       |         Full        |       Sterics       |    Electrostatics  \n"
     # Try to make matplotlib figures
     try:
         import matplotlib.pyplot as plt
@@ -1043,13 +1048,26 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
             indices = timeseries.subsampleCorrelatedData(du_n, g=g)
             du_n = du_n[indices]
             [DeltaF, dDeltaF] = EXP(du_n)
-            # Raise an exception if the error is larger than 3kT.
             MAX_DEVIATION = 3.0 # kT
             if (dDeltaF > MAX_DEVIATION):
                 report += "{0:s}-{1:s} DeltaF = {2:12.3f} +- {3:12.3f} kT ({4:5d} samples, g = {5:6.1f})\n".format(namei, namej, DeltaF, dDeltaF, Neff, g)
+            full_u_i = energies[i,:]['all_energy']
+            full_u_j = energies[i,:]['all_energy']
+            sterics_u_i = energies[i,:]['non_alchemical_sterics'] + energies[i,:]['alchemical_sterics']
+            sterics_u_j = energies[j,:]['non_alchemical_sterics'] + energies[j,:]['alchemical_sterics']
+            electrostatics_u_i = energies[i,:]['non_alchemical_electrostatics'] + energies[i,:]['alchemical_electrostatics']
+            electrostatics_u_j = energies[j,:]['non_alchemical_electrostatics'] + energies[j,:]['alchemical_electrostatics']
+            # Update variance report
+            du_all = full_u_j - full_u_i
+            du_sterics = sterics_u_j - sterics_u_i
+            du_electrostatics = electrostatics_u_j - electrostatics_u_i
+            #                   Names  |        full         |        Sterics      |         Electro
+	    variance_report += "{0}/ {1} | {2:^ 8.3f} / {3:^ 8.3} | {4:^ 8.3f} / {5:^ 8.3f} | {6:^ 8.3f} / {7:^ 8.3f} \n".format(
+               namei, namej, 
+               du_all.mean(), du_all.var(),
+               du_sterics.mean(), du_sterics.var(),
+               du_electrostatics.mean(), du_electrostatics.var())
             try:
-                full_u_i = energies[i,:]['all_energy']
-                full_u_j = energies[i,:]['all_energy']
                 # Configure the full energy scatter plot
                 axmin = min(full_u_i.min(), full_u_j.min() )
                 axmax = max(full_u_i.max(), full_u_j.max() )
@@ -1061,8 +1079,6 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
                 full_u_plots[plot_index].set_xlabel(namei)
                 full_u_plots[plot_index].set_ylabel(namej)
                 # Configure the Sterics Plot
-                sterics_u_i = energies[i,:]['non_alchemical_sterics'] + energies[i,:]['alchemical_sterics']
-                sterics_u_j = energies[j,:]['non_alchemical_sterics'] + energies[j,:]['alchemical_sterics']
                 axmin = min(sterics_u_i.min(), sterics_u_j.min() )
                 axmax = max(sterics_u_i.max(), sterics_u_j.max() )
                 xy = [axmin, axmax]
@@ -1073,8 +1089,6 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
                 decomp_u_plots[plot_index,0].set_xlabel(namei)
                 decomp_u_plots[plot_index,0].set_ylabel(namej)
                 # Configure the Electrostatics Plot
-                electrostatics_u_i = energies[i,:]['non_alchemical_electrostatics'] + energies[i,:]['alchemical_electrostatics']
-                electrostatics_u_j = energies[j,:]['non_alchemical_electrostatics'] + energies[j,:]['alchemical_electrostatics']
                 axmin = min(electrostatics_u_i.min(), electrostatics_u_j.min() )
                 axmax = max(electrostatics_u_i.max(), electrostatics_u_j.max() )
                 xy = [axmin, axmax]
@@ -1089,6 +1103,7 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
 
     if report != "":
         print(report)
+    print(variance_report)
     # Finalize Figures
     try:
         full_u_figure.suptitle("Full Potential Energy Parwise Comparison")
