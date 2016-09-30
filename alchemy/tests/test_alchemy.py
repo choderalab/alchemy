@@ -863,18 +863,25 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
     alchemical_system = factory.createPerturbedSystem(alchemical_state)
 
     # Create an expanded cutoff fully-interacting alchemical state
-    expanded_system = copy.deepcopy(reference_system)
-    for force in expanded_system.getForces():
-        try:
-           base_cutoff = force.getCutoffDistance()
-           expanded_cutoff = base_cutoff * (1 + 1.0/3)
-           force.setCutoffDistance(expanded_cutoff)
-        except:
-           pass
+    # Each number is +X A  to cutoff
+    expanded_1A_system = copy.deepcopy(reference_system)
+    expanded_2A_system = copy.deepcopy(reference_system)
+    expanded_3A_system = copy.deepcopy(reference_system)
+    for plus_cuttoff, system in enumerate([expanded_1A_system, expanded_2A_system, expanded_3A_system]):
+        for force in system.getForces():
+            try:
+               base_cutoff = force.getCutoffDistance()
+               expanded_cutoff = base_cutoff + (plus_cuttoff * unit.angstrom)
+               force.setCutoffDistance(expanded_cutoff)
+            except:
+               pass
 
     try:
         print("Base Cutoff: {0} nm".format(base_cutoff / unit.nanometer))
-        print("Expanded Cutoff: {0} nm".format(expanded_cutoff / unit.nanometer))
+        print("Expanded Cutoffs: {0}, {1}, and {2} nm".format(
+           (base_cutoff + 1*unit.angstrom ) / unit.nanometer,
+           (base_cutoff + 2*unit.angstrom ) / unit.nanometer,
+           (base_cutoff + 3*unit.angstrom ) / unit.nanometer ))
     except: pass
     
 
@@ -914,7 +921,7 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
                 if "U_electrostatics" in energy_expression:
                     force.setForceGroup(4)
     
-    for system in [reference_system, alchemical_system, expanded_system]:
+    for system in [reference_system, alchemical_system, expanded_1A_system, expanded_2A_system, expanded_3A_system]:
         splitNonbondedForcesToGroups(system)
 
     # Select platform.
@@ -925,23 +932,35 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
     # Create integrators.
     reference_integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     alchemical_integrator = openmm.VerletIntegrator(timestep)
-    expanded_integrator = openmm.VerletIntegrator(timestep)
+    expanded_1A_integrator = openmm.VerletIntegrator(timestep)
+    expanded_2A_integrator = openmm.VerletIntegrator(timestep)
+    expanded_3A_integrator = openmm.VerletIntegrator(timestep)
 
     # Create contexts.
     if platform:
         reference_context = openmm.Context(reference_system, reference_integrator, platform)
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator, platform)
-        expanded_context = openmm.Context(expanded_system, expanded_integrator, platform)
+        expanded_1A_context = openmm.Context(expanded_1A_system, expanded_1A_integrator, platform)
+        expanded_2A_context = openmm.Context(expanded_2A_system, expanded_2A_integrator, platform)
+        expanded_3A_context = openmm.Context(expanded_3A_system, expanded_3A_integrator, platform)
     else:
         reference_context = openmm.Context(reference_system, reference_integrator)
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator)
-        expanded_context = openmm.Context(expanded_system, expanded_integrator)
+        expanded_1A_context = openmm.Context(expanded_1A_system, expanded_1A_integrator)
+        expanded_2A_context = openmm.Context(expanded_2A_system, expanded_2A_integrator)
+        expanded_3A_context = openmm.Context(expanded_3A_system, expanded_3A_integrator)
 
     # Book keeping
-    index_names = ("Reference ", 
-                   "Lambda = 1", 
-                   "Expanded  ")
-    contexts = (reference_context, alchemical_context, expanded_context)
+    index_names = (" Reference ", 
+                   "Lambda = 1 ", 
+                   "Expanded 1A",
+                   "Expanded 2A",
+                   "Expanded 3A")
+    base_cut_nm = base_cutoff/unit.nanometer
+    contexts = (reference_context, alchemical_context, expanded_1A_context, expanded_2A_context, expanded_3A_context)
+    cutoffs  = [   base_cut_nm   ,    base_cut_nm    ,     base_cut_nm + 0.1 ,  base_cut_nm + 0.2    ,    base_cut_nm + 0.3 ]
+    cutoffs  = [ str(cut) + 'nm' for cut in cutoffs]
+    nsystems = len(index_names)
 
     if box_vectors is not None:
         for context in contexts:
@@ -980,7 +999,7 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
     # Collect simulation data.
     reference_context.setPositions(positions)
     # Set up the energy decomposed outputs
-    energies = np.zeros([3, nsamples], 
+    energies = np.zeros([nsystems, nsamples], 
        dtype=[('all_energy', 'float64'),
               ('ForceGroup0', 'float64'),
               ('non_alchemical_sterics','float64'), 
@@ -1025,19 +1044,19 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
                 ncfile.variables['positions'][sample,:,:] = reference_state.getPositions(asNumpy=True) / unit.nanometers
 
     # Clean up.
-    del reference_context, alchemical_context, expanded_context
+    for context in contexts:
+        del context
     if cached_trajectory_filename and (ncfile is not None):
         ncfile.close()
 
     # Do pairwise energy difference analysis:
     from pymbar import timeseries
-    nsystems = len(index_names)
     npairs = nsystems*(nsystems-1)/2
     from pymbar import EXP
     report = ""
-    variance_report =  "                  Mean and StdDev of Delta U broken down by type, in kT                 \n"
-    variance_report += "========================================================================================\n"
-    variance_report += "                       |         Full        |       Sterics       |    Electrostatics  \n"
+    variance_report =  "                           Mean and StdDev of Delta U broken down by type, in kT                          \n"
+    variance_report += "==========================================================================================================\n"
+    variance_report += "                         |    Cutoffs    |         Full        |       Sterics       |    Electrostatics  \n"
     # Try to make matplotlib figures
     try:
         import matplotlib.pyplot as plt
@@ -1068,12 +1087,13 @@ def overlap_check(reference_system, positions, box_vectors=None, platform_name=N
             du_all = full_u_j - full_u_i
             du_sterics = sterics_u_j - sterics_u_i
             du_electrostatics = electrostatics_u_j - electrostatics_u_i
-            #                   Names  |        full         |        Sterics      |         Electro
-	    variance_report += "{0}/ {1} | {2:^ 8.3f} / {3:^ 8.3} | {4:^ 8.3f} / {5:^ 8.3f} | {6:^ 8.3f} / {7:^ 8.3f} \n".format(
+            #                   Names    | Cutoffs   |        full         |        Sterics      |         Electro
+	    variance_report += "{0}/ {1} | {cuti:^s} / {cutj:^s} |{2:^ 8.3f} / {3:^ 8.3} | {4:^ 8.3f} / {5:^ 8.3f} | {6:^ 8.3f} / {7:^ 8.3f} \n".format(
                namei, namej, 
                du_all.mean(), du_all.std(),
                du_sterics.mean(), du_sterics.std(),
-               du_electrostatics.mean(), du_electrostatics.std())
+               du_electrostatics.mean(), du_electrostatics.std(),
+               cuti = cutoffs[i], cutj= cutoffs[j])
             try:
                 # Configure the full energy scatter plot
                 axmin = min(full_u_i.min(), full_u_j.min() )
