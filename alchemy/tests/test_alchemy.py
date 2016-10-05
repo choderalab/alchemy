@@ -849,16 +849,20 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
        If specified, attempt to cache (or reuse) trajectory.
 
     """
+    temperature = 300.0 * unit.kelvin
+    pressure = 1.0 * unit.atmospheres
+    collision_rate = 5.0 / unit.picoseconds
+    timestep = 2.0 * unit.femtoseconds
+    kT = (kB * temperature)
+
+    # Add a barostat
+    reference_system = copy.deepcopy(reference_system)
+    reference_system.addForce( openmm.MonteCarloBarostat(pressure, temperature) )
 
     # Create a fully-interacting alchemical state.
     factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
     alchemical_state = AlchemicalState()
     alchemical_system = factory.createPerturbedSystem(alchemical_state)
-
-    temperature = 300.0 * unit.kelvin
-    collision_rate = 5.0 / unit.picoseconds
-    timestep = 2.0 * unit.femtoseconds
-    kT = (kB * temperature)
 
     # Select platform.
     platform = None
@@ -886,10 +890,11 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
         if os.path.exists(cached_trajectory_filename):
             try:
                 ncfile = Dataset(cached_trajectory_filename, 'r')
-                if (ncfile.variables['positions'].shape == (nsamples, reference_system.getNumParticles(), 3)):
+                if (ncfile.variables['positions'].shape == (nsamples, reference_system.getNumParticles(), 3)
+                    and ncfile.variables['box_vectors'].shape == (nsamples, 3, 3)):
                     # Read the cache if everything matches
                     cache_mode = 'read'
-            except:
+            except Exception as e:
                 pass
 
         if cache_mode == 'write':
@@ -902,6 +907,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
                 ncfile.createDimension('atoms', reference_system.getNumParticles())
                 ncfile.createDimension('spatial', 3)
                 ncfile.createVariable('positions', 'f4', ('samples', 'atoms', 'spatial'))
+                ncfile.createVariable('box_vectors', 'f4', ('samples', 'spatial', 'spatial'))
             except Exception as e:
                 logger.info(str(e))
                 logger.info('Could not create a trajectory cache (%s).' % cached_trajectory_filename)
@@ -917,6 +923,8 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
             if cached_trajectory_filename and (cache_mode == 'read'):
                 # Load cached frames.
                 positions = unit.Quantity(ncfile.variables['positions'][sample,:,:], unit.nanometers)
+                box_vectors = unit.Quantity(ncfile.variables['box_vectors'][sample,:,:], unit.nanometers)
+                reference_context.setPeriodicBoxVectors(box_vectors[0,:], box_vectors[1,:], box_vectors[2,:])
                 reference_context.setPositions(positions)
             else:
                 # Run dynamics.
@@ -929,6 +937,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
                 raise Exception("Reference potential is NaN")
 
             # Get alchemical energies.
+            alchemical_context.setPeriodicBoxVectors(*reference_state.getPeriodicBoxVectors())
             alchemical_context.setPositions(reference_state.getPositions(asNumpy=True))
             alchemical_state = alchemical_context.getState(getEnergy=True)
             alchemical_potential = alchemical_state.getPotentialEnergy()
@@ -939,6 +948,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
 
             if cached_trajectory_filename and (cache_mode == 'write') and (ncfile is not None):
                 ncfile.variables['positions'][sample,:,:] = reference_state.getPositions(asNumpy=True) / unit.nanometers
+                ncfile.variables['box_vectors'][sample,:,:] = reference_state.getPeriodicBoxVectors(asNumpy=True) / unit.nanometers
 
     # Clean up.
     del reference_context, alchemical_context
@@ -1099,6 +1109,8 @@ accuracy_testsystem_names = [
 ]
 
 overlap_testsystem_names = [
+    'HostGuest in explicit solvent with PME',
+    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
     'Lennard-Jones cluster',
     'Lennard-Jones fluid without dispersion correction',
     'Lennard-Jones fluid with dispersion correction',
@@ -1106,13 +1118,7 @@ overlap_testsystem_names = [
     'TIP3P with reaction field, switch, no dispersion correction',
     'TIP3P with reaction field, switch, dispersion correction',
     'alanine dipeptide in vacuum with annihilated sterics',
-    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
     'toluene in implicit solvent',
-]
-
-overlap_testsystem_names = [
-    'HostGuest in explicit solvent with PME',
-    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
 ]
 
 test_systems = dict()
