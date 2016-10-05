@@ -274,7 +274,7 @@ def compare_platforms(system, positions, factory_args=dict()):
             if (abs(delta) > MAX_DELTA):
                 raise Exception("Maximum allowable deviation on platform %s exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (platform_name, delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
-def test_denihilated_states(platform_name=None, precision=None):
+def notest_denihilated_states(platform_name=None, precision=None):
     """Compare annihilated electrostatics / decoupled sterics states in vacuum and a large box.
     """
     testsystem = testsystems.TolueneVacuum()
