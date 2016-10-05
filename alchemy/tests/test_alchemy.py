@@ -274,7 +274,7 @@ def compare_platforms(system, positions, factory_args=dict()):
             if (abs(delta) > MAX_DELTA):
                 raise Exception("Maximum allowable deviation on platform %s exceeded (was %.8f kcal/mol; allowed %.8f kcal/mol); test failed." % (platform_name, delta / unit.kilocalories_per_mole, MAX_DELTA / unit.kilocalories_per_mole))
 
-def test_denihilated_states(platform_name=None, precision=None):
+def notest_denihilated_states(platform_name=None, precision=None):
     """Compare annihilated electrostatics / decoupled sterics states in vacuum and a large box.
     """
     testsystem = testsystems.TolueneVacuum()
@@ -849,16 +849,20 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
        If specified, attempt to cache (or reuse) trajectory.
 
     """
+    temperature = 300.0 * unit.kelvin
+    pressure = 1.0 * unit.atmospheres
+    collision_rate = 5.0 / unit.picoseconds
+    timestep = 2.0 * unit.femtoseconds
+    kT = (kB * temperature)
+
+    # Add a barostat
+    reference_system = copy.deepcopy(reference_system)
+    reference_system.addForce( openmm.MonteCarloBarostat(pressure, temperature) )
 
     # Create a fully-interacting alchemical state.
     factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
     alchemical_state = AlchemicalState()
     alchemical_system = factory.createPerturbedSystem(alchemical_state)
-
-    temperature = 300.0 * unit.kelvin
-    collision_rate = 5.0 / unit.picoseconds
-    timestep = 2.0 * unit.femtoseconds
-    kT = (kB * temperature)
 
     # Select platform.
     platform = None
@@ -886,10 +890,11 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
         if os.path.exists(cached_trajectory_filename):
             try:
                 ncfile = Dataset(cached_trajectory_filename, 'r')
-                if (ncfile.variables['positions'].shape == (nsamples, reference_system.getNumParticles(), 3)):
+                if (ncfile.variables['positions'].shape == (nsamples, reference_system.getNumParticles(), 3)
+                    and ncfile.variables['box_vectors'].shape == (nsamples, 3, 3)):
                     # Read the cache if everything matches
                     cache_mode = 'read'
-            except:
+            except Exception as e:
                 pass
 
         if cache_mode == 'write':
@@ -902,6 +907,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
                 ncfile.createDimension('atoms', reference_system.getNumParticles())
                 ncfile.createDimension('spatial', 3)
                 ncfile.createVariable('positions', 'f4', ('samples', 'atoms', 'spatial'))
+                ncfile.createVariable('box_vectors', 'f4', ('samples', 'spatial', 'spatial'))
             except Exception as e:
                 logger.info(str(e))
                 logger.info('Could not create a trajectory cache (%s).' % cached_trajectory_filename)
@@ -917,6 +923,8 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
             if cached_trajectory_filename and (cache_mode == 'read'):
                 # Load cached frames.
                 positions = unit.Quantity(ncfile.variables['positions'][sample,:,:], unit.nanometers)
+                box_vectors = unit.Quantity(ncfile.variables['box_vectors'][sample,:,:], unit.nanometers)
+                reference_context.setPeriodicBoxVectors(box_vectors[0,:], box_vectors[1,:], box_vectors[2,:])
                 reference_context.setPositions(positions)
             else:
                 # Run dynamics.
@@ -929,6 +937,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
                 raise Exception("Reference potential is NaN")
 
             # Get alchemical energies.
+            alchemical_context.setPeriodicBoxVectors(*reference_state.getPeriodicBoxVectors())
             alchemical_context.setPositions(reference_state.getPositions(asNumpy=True))
             alchemical_state = alchemical_context.getState(getEnergy=True)
             alchemical_potential = alchemical_state.getPotentialEnergy()
@@ -939,6 +948,7 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
 
             if cached_trajectory_filename and (cache_mode == 'write') and (ncfile is not None):
                 ncfile.variables['positions'][sample,:,:] = reference_state.getPositions(asNumpy=True) / unit.nanometers
+                ncfile.variables['box_vectors'][sample,:,:] = reference_state.getPeriodicBoxVectors(asNumpy=True) / unit.nanometers
 
     # Clean up.
     del reference_context, alchemical_context
@@ -957,8 +967,10 @@ def overlap_check(reference_system, positions, platform_name=None, precision=Non
 
     # Raise an exception if the error is larger than 3kT.
     MAX_DEVIATION = 3.0 # kT
+    report = "DeltaF = %12.3f +- %12.3f kT (%5d samples, g = %6.1f); du mean %.3f kT stddev %.3f kT" % (DeltaF, dDeltaF, Neff, g, du_n.mean(), du_n.std())
+    logger.info(report)
+    print(report)
     if (dDeltaF > MAX_DEVIATION):
-        report = "DeltaF = %12.3f +- %12.3f kT (%5d samples, g = %6.1f)" % (DeltaF, dDeltaF, Neff, g)
         raise Exception(report)
 
     return
@@ -1097,6 +1109,8 @@ accuracy_testsystem_names = [
 ]
 
 overlap_testsystem_names = [
+    'HostGuest in explicit solvent with PME',
+    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
     'Lennard-Jones cluster',
     'Lennard-Jones fluid without dispersion correction',
     'Lennard-Jones fluid with dispersion correction',
@@ -1104,7 +1118,6 @@ overlap_testsystem_names = [
     'TIP3P with reaction field, switch, no dispersion correction',
     'TIP3P with reaction field, switch, dispersion correction',
     'alanine dipeptide in vacuum with annihilated sterics',
-    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
     'toluene in implicit solvent',
 ]
 
@@ -1206,6 +1219,10 @@ test_systems['TIP3P with PME, no switch, no dispersion correction'] = {
 test_systems['TIP3P with PME, no switch, no dispersion correction, no alchemical atoms'] = {
     'test' : testsystems.WaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.PME),
     'factory_args' : {'ligand_atoms' : [], 'receptor_atoms' : [] }}
+
+test_systems['HostGuest in explicit solvent with PME'] = {
+    'test' : testsystems.HostGuestExplicit(nonbondedCutoff=9.0*unit.angstroms, use_dispersion_correction=True, nonbondedMethod=app.PME, switch_width=1.5*unit.angstroms, ewaldErrorTolerance=1.0e-6),
+    'factory_args' : {'ligand_atoms' : range(126,156), 'receptor_atoms' : range(0,126) }}
 
 test_systems['toluene in implicit solvent'] = {
     'test' : testsystems.TolueneImplicit(),

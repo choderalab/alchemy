@@ -41,7 +41,7 @@ script:
   # Install testing dependencies
   - conda install --yes --quiet nose nose-timer click netcdf4 pymbar openmmtools
   # Test the package
-  - cd devtools && nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer -a '!slow' && cd ..
+  - cd devtools && nosetests $PACKAGENAME --nocapture --nologcapture --verbosity=2 --with-doctest --with-timer -a '!slow' && cd ..
 
 env:
   matrix:
