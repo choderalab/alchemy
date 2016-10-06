@@ -362,18 +362,18 @@ def dissect_nonbonded_energy(reference_system, positions, alchemical_atoms, plat
     -------
     tuple of simtk.openmm.unit.Quantity with units compatible with kJ/mol
         All contributions to the potential energy of NonbondedForce in the order:
-        nonalchem_part_sterics: particle sterics interactions between nonalchemical atoms
-        alchem_part_sterics: particle sterics interactions between alchemical atoms
-        interface_part_sterics: particle sterics interactions between nonalchemical-alchemical atoms
-        nonalchem_part_electro: particle electrostatics interactions between nonalchemical atoms
-        alchem_part_electro: particle electrostatics interactions between alchemical atoms
-        interface_part_electro: particle electrostatics interactions between nonalchemical-alchemical atoms
-        nonalchem_excep_sterics: particle sterics 1,4 exceptions between nonalchemical atoms
-        alchem_excep_sterics: particle sterics 1,4 exceptions between alchemical atoms
-        interface_excep_sterics: particle sterics 1,4 exceptions between nonalchemical-alchemical atoms
-        nonalchem_excep_electro: particle electrostatics 1,4 exceptions between nonalchemical atoms
-        alchem_excep_electro: particle electrostatics 1,4 exceptions between alchemical atoms
-        interface_excep_electro: particle electrostatics 1,4 exceptions between nonalchemical-alchemical atoms
+        nn_particle_sterics: particle sterics interactions between nonalchemical atoms
+        aa_particle_sterics: particle sterics interactions between alchemical atoms
+        interface_particle_sterics: particle sterics interactions between nonalchemical-alchemical atoms
+        nn_particle_electro: particle electrostatics interactions between nonalchemical atoms
+        aa_particle_electro: particle electrostatics interactions between alchemical atoms
+        interface_particle_electro: particle electrostatics interactions between nonalchemical-alchemical atoms
+        nn_exception_sterics: particle sterics 1,4 exceptions between nonalchemical atoms
+        aa_exception_sterics: particle sterics 1,4 exceptions between alchemical atoms
+        interface_exception_sterics: particle sterics 1,4 exceptions between nonalchemical-alchemical atoms
+        nn_exception_electro: particle electrostatics 1,4 exceptions between nonalchemical atoms
+        aa_exception_electro: particle electrostatics 1,4 exceptions between alchemical atoms
+        interface_exception_electro: particle electrostatics 1,4 exceptions between nonalchemical-alchemical atoms
 
     """
 
@@ -421,32 +421,32 @@ def dissect_nonbonded_energy(reference_system, positions, alchemical_atoms, plat
 
     # Compute contributions from particle sterics
     turn_off(nonbonded_force, sterics=True, only_atoms=alchemical_atoms)
-    tot_energy_no_alchem_part_sterics = compute_energy(system, positions, platform)
+    tot_energy_no_alchem_particle_sterics = compute_energy(system, positions, platform)
     system, nonbonded_force = restore_system(reference_system)  # Restore alchemical sterics
     turn_off(nonbonded_force, sterics=True, only_atoms=nonalchemical_atoms)
-    tot_energy_no_nonalchem_part_sterics = compute_energy(system, positions, platform)
+    tot_energy_no_nonalchem_particle_sterics = compute_energy(system, positions, platform)
     turn_off(nonbonded_force, sterics=True)
-    tot_energy_no_part_sterics = compute_energy(system, positions, platform)
+    tot_energy_no_particle_sterics = compute_energy(system, positions, platform)
 
-    tot_part_sterics = tot_energy - tot_energy_no_part_sterics
-    nonalchem_part_sterics = tot_energy_no_alchem_part_sterics - tot_energy_no_part_sterics
-    alchem_part_sterics = tot_energy_no_nonalchem_part_sterics - tot_energy_no_part_sterics
-    interface_part_sterics = tot_part_sterics - nonalchem_part_sterics - alchem_part_sterics
+    tot_particle_sterics = tot_energy - tot_energy_no_particle_sterics
+    nn_particle_sterics = tot_energy_no_alchem_particle_sterics - tot_energy_no_particle_sterics
+    aa_particle_sterics = tot_energy_no_nonalchem_particle_sterics - tot_energy_no_particle_sterics
+    interface_particle_sterics = tot_particle_sterics - nn_particle_sterics - aa_particle_sterics
 
     # Compute contributions from particle electrostatics
     system, nonbonded_force = restore_system(reference_system)  # Restore sterics
     turn_off(nonbonded_force, electrostatics=True, only_atoms=alchemical_atoms)
-    tot_energy_no_alchem_part_electro = compute_energy(system, positions, platform)
+    tot_energy_no_alchem_particle_electro = compute_energy(system, positions, platform)
     system, nonbonded_force = restore_system(reference_system)  # Restore alchemical electrostatics
     turn_off(nonbonded_force, electrostatics=True, only_atoms=nonalchemical_atoms)
-    tot_energy_no_nonalchem_part_electro = compute_energy(system, positions, platform)
+    tot_energy_no_nonalchem_particle_electro = compute_energy(system, positions, platform)
     turn_off(nonbonded_force, electrostatics=True)
-    tot_energy_no_part_electro = compute_energy(system, positions, platform)
+    tot_energy_no_particle_electro = compute_energy(system, positions, platform)
 
-    tot_part_electro = tot_energy - tot_energy_no_part_electro
-    nonalchem_part_electro = tot_energy_no_alchem_part_electro - tot_energy_no_part_electro
-    alchem_part_electro = tot_energy_no_nonalchem_part_electro - tot_energy_no_part_electro
-    interface_part_electro = tot_part_electro - nonalchem_part_electro - alchem_part_electro
+    tot_particle_electro = tot_energy - tot_energy_no_particle_electro
+    nn_particle_electro = tot_energy_no_alchem_particle_electro - tot_energy_no_particle_electro
+    aa_particle_electro = tot_energy_no_nonalchem_particle_electro - tot_energy_no_particle_electro
+    interface_particle_electro = tot_particle_electro - nn_particle_electro - aa_particle_electro
 
 
     # Compute exceptions between different groups of atoms
@@ -455,44 +455,44 @@ def dissect_nonbonded_energy(reference_system, positions, alchemical_atoms, plat
     # Compute contributions from exceptions sterics
     system, nonbonded_force = restore_system(reference_system)  # Restore particle interactions
     turn_off(nonbonded_force, sterics=True, exceptions=True, only_atoms=alchemical_atoms)
-    tot_energy_no_alchem_excep_sterics = compute_energy(system, positions, platform)
+    tot_energy_no_alchem_exception_sterics = compute_energy(system, positions, platform)
     system, nonbonded_force = restore_system(reference_system)  # Restore alchemical sterics
     turn_off(nonbonded_force, sterics=True, exceptions=True, only_atoms=nonalchemical_atoms)
-    tot_energy_no_nonalchem_excep_sterics = compute_energy(system, positions, platform)
+    tot_energy_no_nonalchem_exception_sterics = compute_energy(system, positions, platform)
     turn_off(nonbonded_force, sterics=True, exceptions=True)
-    tot_energy_no_excep_sterics = compute_energy(system, positions, platform)
+    tot_energy_no_exception_sterics = compute_energy(system, positions, platform)
 
-    tot_excep_sterics = tot_energy - tot_energy_no_excep_sterics
-    nonalchem_excep_sterics = tot_energy_no_alchem_excep_sterics - tot_energy_no_excep_sterics
-    alchem_excep_sterics = tot_energy_no_nonalchem_excep_sterics - tot_energy_no_excep_sterics
-    interface_excep_sterics = tot_excep_sterics - nonalchem_excep_sterics - alchem_excep_sterics
+    tot_exception_sterics = tot_energy - tot_energy_no_exception_sterics
+    nn_exception_sterics = tot_energy_no_alchem_exception_sterics - tot_energy_no_exception_sterics
+    aa_exception_sterics = tot_energy_no_nonalchem_exception_sterics - tot_energy_no_exception_sterics
+    interface_exception_sterics = tot_exception_sterics - nn_exception_sterics - aa_exception_sterics
 
     # Compute contributions from exceptions electrostatics
     system, nonbonded_force = restore_system(reference_system)  # Restore exceptions sterics
     turn_off(nonbonded_force, electrostatics=True, exceptions=True, only_atoms=alchemical_atoms)
-    tot_energy_no_alchem_excep_electro = compute_energy(system, positions, platform)
+    tot_energy_no_alchem_exception_electro = compute_energy(system, positions, platform)
     system, nonbonded_force = restore_system(reference_system)  # Restore alchemical electrostatics
     turn_off(nonbonded_force, electrostatics=True, exceptions=True, only_atoms=nonalchemical_atoms)
-    tot_energy_no_nonalchem_excep_electro = compute_energy(system, positions, platform)
+    tot_energy_no_nonalchem_exception_electro = compute_energy(system, positions, platform)
     turn_off(nonbonded_force, electrostatics=True, exceptions=True)
-    tot_energy_no_excep_electro = compute_energy(system, positions, platform)
+    tot_energy_no_exception_electro = compute_energy(system, positions, platform)
 
-    tot_excep_electro = tot_energy - tot_energy_no_excep_electro
-    nonalchem_excep_electro = tot_energy_no_alchem_excep_electro - tot_energy_no_excep_electro
-    alchem_excep_electro = tot_energy_no_nonalchem_excep_electro - tot_energy_no_excep_electro
-    interface_excep_electro = tot_excep_electro - nonalchem_excep_electro - alchem_excep_electro
+    tot_exception_electro = tot_energy - tot_energy_no_exception_electro
+    nn_exception_electro = tot_energy_no_alchem_exception_electro - tot_energy_no_exception_electro
+    aa_exception_electro = tot_energy_no_nonalchem_exception_electro - tot_energy_no_exception_electro
+    interface_exception_electro = tot_exception_electro - nn_exception_electro - aa_exception_electro
 
-    assert tot_part_sterics == nonalchem_part_sterics + alchem_part_sterics + interface_part_sterics
-    assert tot_part_electro == nonalchem_part_electro + alchem_part_electro + interface_part_electro
-    assert tot_excep_sterics == nonalchem_excep_sterics + alchem_excep_sterics + interface_excep_sterics
-    assert tot_excep_electro == nonalchem_excep_electro + alchem_excep_electro + interface_excep_electro
-    assert_almost_equal(tot_energy, tot_part_sterics + tot_part_electro + tot_excep_sterics + tot_excep_electro,
+    assert tot_particle_sterics == nn_particle_sterics + aa_particle_sterics + interface_particle_sterics
+    assert tot_particle_electro == nn_particle_electro + aa_particle_electro + interface_particle_electro
+    assert tot_exception_sterics == nn_exception_sterics + aa_exception_sterics + interface_exception_sterics
+    assert tot_exception_electro == nn_exception_electro + aa_exception_electro + interface_exception_electro
+    assert_almost_equal(tot_energy, tot_particle_sterics + tot_particle_electro + tot_exception_sterics + tot_exception_electro,
                         'Inconsistency during dissection of nonbonded contributions:')
 
-    return nonalchem_part_sterics, alchem_part_sterics, interface_part_sterics,\
-           nonalchem_part_electro, alchem_part_electro, interface_part_electro,\
-           nonalchem_excep_sterics, alchem_excep_sterics, interface_excep_sterics,\
-           nonalchem_excep_electro, alchem_excep_electro, interface_excep_electro
+    return nn_particle_sterics, aa_particle_sterics, interface_particle_sterics,\
+           nn_particle_electro, aa_particle_electro, interface_particle_electro,\
+           nn_exception_sterics, aa_exception_sterics, interface_exception_sterics,\
+           nn_exception_electro, aa_exception_electro, interface_exception_electro
 
 
 def check_interacting_energy_components(factory, positions, platform=None):
