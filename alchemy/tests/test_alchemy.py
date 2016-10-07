@@ -24,7 +24,6 @@ from simtk import unit, openmm
 from simtk.openmm import app
 
 from nose.plugins.attrib import attr
-import pymbar
 
 import logging
 logger = logging.getLogger(__name__)
@@ -33,7 +32,6 @@ from openmmtools import testsystems
 
 from alchemy import AlchemicalState, AbsoluteAlchemicalFactory, ONE_4PI_EPS0
 
-from nose.plugins.skip import Skip, SkipTest
 
 #=============================================================================================
 # CONSTANTS
