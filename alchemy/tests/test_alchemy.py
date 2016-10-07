@@ -15,6 +15,7 @@ Tests for alchemical factory in `alchemy.py`.
 
 import os, os.path
 import numpy as np
+import scipy
 import copy
 import time
 from functools import partial
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 from openmmtools import testsystems
 
-from alchemy import AlchemicalState, AbsoluteAlchemicalFactory
+from alchemy import AlchemicalState, AbsoluteAlchemicalFactory, ONE_4PI_EPS0
 
 from nose.plugins.skip import Skip, SkipTest
 
@@ -364,16 +365,19 @@ def dissect_nonbonded_energy(reference_system, positions, alchemical_atoms, plat
         All contributions to the potential energy of NonbondedForce in the order:
         nn_particle_sterics: particle sterics interactions between nonalchemical atoms
         aa_particle_sterics: particle sterics interactions between alchemical atoms
-        interface_particle_sterics: particle sterics interactions between nonalchemical-alchemical atoms
-        nn_particle_electro: particle electrostatics interactions between nonalchemical atoms
-        aa_particle_electro: particle electrostatics interactions between alchemical atoms
-        interface_particle_electro: particle electrostatics interactions between nonalchemical-alchemical atoms
+        na_particle_sterics: particle sterics interactions between nonalchemical-alchemical atoms
+        nn_particle_electro: (direct space) particle electrostatics interactions between nonalchemical atoms
+        aa_particle_electro: (direct space) particle electrostatics interactions between alchemical atoms
+        na_particle_electro: (direct space) particle electrostatics interactions between nonalchemical-alchemical atoms
         nn_exception_sterics: particle sterics 1,4 exceptions between nonalchemical atoms
         aa_exception_sterics: particle sterics 1,4 exceptions between alchemical atoms
-        interface_exception_sterics: particle sterics 1,4 exceptions between nonalchemical-alchemical atoms
+        na_exception_sterics: particle sterics 1,4 exceptions between nonalchemical-alchemical atoms
         nn_exception_electro: particle electrostatics 1,4 exceptions between nonalchemical atoms
         aa_exception_electro: particle electrostatics 1,4 exceptions between alchemical atoms
-        interface_exception_electro: particle electrostatics 1,4 exceptions between nonalchemical-alchemical atoms
+        na_exception_electro: particle electrostatics 1,4 exceptions between nonalchemical-alchemical atoms
+        nn_reciprocal_energy: electrostatics of reciprocal space between nonalchemical atoms
+        aa_reciprocal_energy: electrostatics of reciprocal space between alchemical atoms
+        na_reciprocal_energy: electrostatics of reciprocal space between nonalchemical-alchemical atoms
 
     """
 
@@ -408,6 +412,9 @@ def dissect_nonbonded_energy(reference_system, positions, alchemical_atoms, plat
     for force_index, force in enumerate(reference_system.getForces()):
         if force.__class__.__name__ != 'NonbondedForce':
             forces_to_remove.append(force_index)
+        else:
+            force.setForceGroup(0)
+            force.setReciprocalSpaceForceGroup(31)  # separate PME reciprocal from direct space
     for force_index in reversed(forces_to_remove):
         reference_system.removeForce(force_index)
     assert len(reference_system.getForces()) == 1
@@ -418,6 +425,7 @@ def dissect_nonbonded_energy(reference_system, positions, alchemical_atoms, plat
 
     # Compute total energy from nonbonded interactions
     tot_energy = compute_energy(system, positions, platform)
+    tot_reciprocal_energy = compute_energy(system, positions, platform, force_group={31})
 
     # Compute contributions from particle sterics
     turn_off(nonbonded_force, sterics=True, only_atoms=alchemical_atoms)
@@ -431,22 +439,29 @@ def dissect_nonbonded_energy(reference_system, positions, alchemical_atoms, plat
     tot_particle_sterics = tot_energy - tot_energy_no_particle_sterics
     nn_particle_sterics = tot_energy_no_alchem_particle_sterics - tot_energy_no_particle_sterics
     aa_particle_sterics = tot_energy_no_nonalchem_particle_sterics - tot_energy_no_particle_sterics
-    interface_particle_sterics = tot_particle_sterics - nn_particle_sterics - aa_particle_sterics
+    na_particle_sterics = tot_particle_sterics - nn_particle_sterics - aa_particle_sterics
 
     # Compute contributions from particle electrostatics
     system, nonbonded_force = restore_system(reference_system)  # Restore sterics
     turn_off(nonbonded_force, electrostatics=True, only_atoms=alchemical_atoms)
     tot_energy_no_alchem_particle_electro = compute_energy(system, positions, platform)
+    nn_reciprocal_energy = compute_energy(system, positions, platform, force_group={31})
     system, nonbonded_force = restore_system(reference_system)  # Restore alchemical electrostatics
     turn_off(nonbonded_force, electrostatics=True, only_atoms=nonalchemical_atoms)
     tot_energy_no_nonalchem_particle_electro = compute_energy(system, positions, platform)
+    aa_reciprocal_energy = compute_energy(system, positions, platform, force_group={31})
     turn_off(nonbonded_force, electrostatics=True)
     tot_energy_no_particle_electro = compute_energy(system, positions, platform)
 
+    na_reciprocal_energy = tot_reciprocal_energy - nn_reciprocal_energy - aa_reciprocal_energy
     tot_particle_electro = tot_energy - tot_energy_no_particle_electro
+
     nn_particle_electro = tot_energy_no_alchem_particle_electro - tot_energy_no_particle_electro
     aa_particle_electro = tot_energy_no_nonalchem_particle_electro - tot_energy_no_particle_electro
-    interface_particle_electro = tot_particle_electro - nn_particle_electro - aa_particle_electro
+    na_particle_electro = tot_particle_electro - nn_particle_electro - aa_particle_electro
+    nn_particle_electro -= nn_reciprocal_energy
+    aa_particle_electro -= aa_reciprocal_energy
+    na_particle_electro -= na_reciprocal_energy
 
 
     # Compute exceptions between different groups of atoms
@@ -465,7 +480,7 @@ def dissect_nonbonded_energy(reference_system, positions, alchemical_atoms, plat
     tot_exception_sterics = tot_energy - tot_energy_no_exception_sterics
     nn_exception_sterics = tot_energy_no_alchem_exception_sterics - tot_energy_no_exception_sterics
     aa_exception_sterics = tot_energy_no_nonalchem_exception_sterics - tot_energy_no_exception_sterics
-    interface_exception_sterics = tot_exception_sterics - nn_exception_sterics - aa_exception_sterics
+    na_exception_sterics = tot_exception_sterics - nn_exception_sterics - aa_exception_sterics
 
     # Compute contributions from exceptions electrostatics
     system, nonbonded_force = restore_system(reference_system)  # Restore exceptions sterics
@@ -480,19 +495,87 @@ def dissect_nonbonded_energy(reference_system, positions, alchemical_atoms, plat
     tot_exception_electro = tot_energy - tot_energy_no_exception_electro
     nn_exception_electro = tot_energy_no_alchem_exception_electro - tot_energy_no_exception_electro
     aa_exception_electro = tot_energy_no_nonalchem_exception_electro - tot_energy_no_exception_electro
-    interface_exception_electro = tot_exception_electro - nn_exception_electro - aa_exception_electro
+    na_exception_electro = tot_exception_electro - nn_exception_electro - aa_exception_electro
 
-    assert tot_particle_sterics == nn_particle_sterics + aa_particle_sterics + interface_particle_sterics
-    assert tot_particle_electro == nn_particle_electro + aa_particle_electro + interface_particle_electro
-    assert tot_exception_sterics == nn_exception_sterics + aa_exception_sterics + interface_exception_sterics
-    assert tot_exception_electro == nn_exception_electro + aa_exception_electro + interface_exception_electro
-    assert_almost_equal(tot_energy, tot_particle_sterics + tot_particle_electro + tot_exception_sterics + tot_exception_electro,
+    assert tot_particle_sterics == nn_particle_sterics + aa_particle_sterics + na_particle_sterics
+    assert_almost_equal(tot_particle_electro, nn_particle_electro + aa_particle_electro +
+                        na_particle_electro + nn_reciprocal_energy + aa_reciprocal_energy + na_reciprocal_energy,
+                        'Inconsistency during dissection of nonbonded contributions:')
+    assert tot_exception_sterics == nn_exception_sterics + aa_exception_sterics + na_exception_sterics
+    assert tot_exception_electro == nn_exception_electro + aa_exception_electro + na_exception_electro
+    assert_almost_equal(tot_energy, tot_particle_sterics + tot_particle_electro +
+                        tot_exception_sterics + tot_exception_electro,
                         'Inconsistency during dissection of nonbonded contributions:')
 
-    return nn_particle_sterics, aa_particle_sterics, interface_particle_sterics,\
-           nn_particle_electro, aa_particle_electro, interface_particle_electro,\
-           nn_exception_sterics, aa_exception_sterics, interface_exception_sterics,\
-           nn_exception_electro, aa_exception_electro, interface_exception_electro
+    return nn_particle_sterics, aa_particle_sterics, na_particle_sterics,\
+           nn_particle_electro, aa_particle_electro, na_particle_electro,\
+           nn_exception_sterics, aa_exception_sterics, na_exception_sterics,\
+           nn_exception_electro, aa_exception_electro, na_exception_electro,\
+           nn_reciprocal_energy, aa_reciprocal_energy, na_reciprocal_energy
+
+
+def compute_direct_space_correction(nonbonded_force, alchemical_atoms, positions):
+    """
+    Compute the correction added by OpenMM to the direct space to account for
+    exception in reciprocal space energy.
+
+    Parameters
+    ----------
+    nonbonded_force : simtk.openmm.NonbondedForce
+        The nonbonded force to compute the direct space correction.
+    alchemical_atoms : set
+        Set of alchemical particles in the force.
+    positions : numpy.array
+        Position of the particles.
+
+    Returns
+    -------
+    aa_correction : simtk.openmm.unit.Quantity with units compatible with kJ/mol
+        The correction to the direct spaced caused by exceptions between alchemical atoms.
+    na_correction : simtk.openmm.unit.Quantity with units compatible with kJ/mol
+        The correction to the direct spaced caused by exceptions between nonalchemical-alchemical atoms.
+
+    """
+    energy_unit = unit.kilojoule_per_mole
+    aa_correction = 0.0
+    na_correction = 0.0
+
+    # If there is no reciprocal space, the correction is 0.0
+    if nonbonded_force.getNonbondedMethod() not in [openmm.NonbondedForce.Ewald, openmm.NonbondedForce.PME]:
+        return nn_correction * energy_unit, aa_correction * energy_unit, na_correction * energy_unit
+
+    # Get alpha ewald parameter
+    alpha_ewald, _, _, _ = nonbonded_force.getPMEParameters()
+    if alpha_ewald / alpha_ewald.unit == 0.0:
+        cutoff_distance = nonbonded_force.getCutoffDistance()
+        tolerance = nonbonded_force.getEwaldErrorTolerance()
+        alpha_ewald = (1.0 / cutoff_distance) * np.sqrt(-np.log(2.0*tolerance))
+    alpha_ewald = alpha_ewald.value_in_unit_system(unit.md_unit_system)
+    assert alpha_ewald != 0.0
+
+    for exception_id in range(nonbonded_force.getNumExceptions()):
+        # Get particles parameters in md unit system
+        iatom, jatom, _, _, _ = nonbonded_force.getExceptionParameters(exception_id)
+        icharge, _, _ = nonbonded_force.getParticleParameters(iatom)
+        jcharge, _, _ = nonbonded_force.getParticleParameters(jatom)
+        icharge = icharge.value_in_unit_system(unit.md_unit_system)
+        jcharge = jcharge.value_in_unit_system(unit.md_unit_system)
+
+        # Compute the correction and take care of numerical instabilities
+        r = np.linalg.norm(positions[iatom] - positions[jatom])  # distance between atoms
+        alpha_r = alpha_ewald * r
+        if alpha_r > 1e-6:
+            correction = ONE_4PI_EPS0 * icharge * jcharge * scipy.special.erf(alpha_r) / r
+        else:  # for small alpha_r we linearize erf()
+            correction = ONE_4PI_EPS0 * alpha_ewald * icharge * jcharge * 2.0 / np.sqrt(np.pi)
+
+        # Assign correction to correct group
+        if iatom in alchemical_atoms and jatom in alchemical_atoms:
+            aa_correction += correction
+        elif iatom in alchemical_atoms or jatom in alchemical_atoms:
+            na_correction += correction
+
+    return aa_correction * energy_unit, na_correction * energy_unit
 
 
 def check_interacting_energy_components(factory, positions, platform=None):
@@ -513,9 +596,10 @@ def check_interacting_energy_components(factory, positions, platform=None):
     alchemical_system = copy.deepcopy(factory.alchemically_modified_system)
 
     # Find nonbonded method
-    for force in reference_system.getForces():
-        if isinstance(force, openmm.NonbondedForce):
-            nonbonded_method = force.getNonbondedMethod()
+    for nonbonded_force in reference_system.getForces():
+        if isinstance(nonbonded_force, openmm.NonbondedForce):
+            nonbonded_method = nonbonded_force.getNonbondedMethod()
+            break
 
     # Get energy components of reference system's nonbonded force
     print("Dissecting reference system's nonbonded force")
@@ -524,7 +608,8 @@ def check_interacting_energy_components(factory, positions, platform=None):
     nn_particle_sterics, aa_particle_sterics, na_particle_sterics,\
     nn_particle_electro, aa_particle_electro, na_particle_electro,\
     nn_exception_sterics, aa_exception_sterics, na_exception_sterics,\
-    nn_exception_electro, aa_exception_electro, na_exception_electro = energy_components
+    nn_exception_electro, aa_exception_electro, na_exception_electro,\
+    nn_reciprocal_energy, aa_reciprocal_energy, na_reciprocal_energy = energy_components
 
     # Dissect unmodified nonbonded force in alchemical system
     print("Dissecting alchemical system's unmodified nonbonded force")
@@ -533,7 +618,8 @@ def check_interacting_energy_components(factory, positions, platform=None):
     unmod_nn_particle_sterics, unmod_aa_particle_sterics, unmod_na_particle_sterics,\
     unmod_nn_particle_electro, unmod_aa_particle_electro, unmod_na_particle_electro,\
     unmod_nn_exception_sterics, unmod_aa_exception_sterics, unmod_na_exception_sterics,\
-    unmod_nn_exception_electro, unmod_aa_exception_electro, unmod_na_exception_electro = energy_components
+    unmod_nn_exception_electro, unmod_aa_exception_electro, unmod_na_exception_electro,\
+    unmod_nn_reciprocal_energy, unmod_aa_reciprocal_energy, unmod_na_reciprocal_energy = energy_components
 
     # Get alchemically-modified energy components
     print("Computing alchemical system components energies")
@@ -562,6 +648,8 @@ def check_interacting_energy_components(factory, positions, platform=None):
     assert_almost_equal(unmod_na_particle_electro, 0.0 * energy_unit, err_msg)
     assert_almost_equal(unmod_aa_exception_electro, 0.0 * energy_unit, err_msg)
     assert_almost_equal(unmod_na_exception_electro, 0.0 * energy_unit, err_msg)
+    assert_almost_equal(unmod_aa_reciprocal_energy, 0.0 * energy_unit, err_msg)
+    assert_almost_equal(unmod_na_reciprocal_energy, 0.0 * energy_unit, err_msg)
 
     # Check sterics interactions match
     assert_almost_equal(nn_particle_sterics, unmod_nn_particle_sterics,
@@ -582,13 +670,37 @@ def check_interacting_energy_components(factory, positions, platform=None):
                         'Non-alchemical/non-alchemical atoms particle electrostatics')
     assert_almost_equal(nn_exception_electro, unmod_nn_exception_electro,
                         'Non-alchemical/non-alchemical atoms exceptions electrostatics')
-    assert_almost_equal(aa_particle_electro, aa_custom_particle_electro,
-                        'Alchemical/alchemical atoms particle electrostatics')
-    assert_almost_equal(aa_exception_electro, aa_custom_exception_electro,
-                        'Alchemical/alchemical atoms exceptions electrostatics')
-    if nonbonded_method != openmm.NonbondedForce.PME:  # TODO for PME this test still fails
+    if nonbonded_method == openmm.NonbondedForce.PME or nonbonded_method == openmm.NonbondedForce.Ewald:
+        # TODO check ALL reciprocal energies if/when they'll be implemented
+        # assert_almost_equal(aa_reciprocal_energy, unmod_aa_reciprocal_energy)
+        # assert_almost_equal(na_reciprocal_energy, unmod_na_reciprocal_energy)
+        assert_almost_equal(nn_reciprocal_energy, unmod_nn_reciprocal_energy,
+                            'Non-alchemical/non-alchemical atoms reciprocal space energy')
+
+        # Get direct space correction due to reciprocal space exceptions
+        aa_correction, na_correction = compute_direct_space_correction(nonbonded_force,
+                                                                       factory.ligand_atomset, positions)
+        aa_particle_electro += aa_correction
+        na_particle_electro += na_correction
+
+        # Check direct space energy
+        assert_almost_equal(aa_particle_electro, aa_custom_particle_electro,
+                            'Alchemical/alchemical atoms particle electrostatics')
         assert_almost_equal(na_particle_electro, na_custom_particle_electro,
                             'Non-alchemical/alchemical atoms particle electrostatics')
+    else:
+        # Reciprocal space energy should be null in this case
+        assert nn_reciprocal_energy == unmod_nn_reciprocal_energy == 0.0 * energy_unit
+        assert aa_reciprocal_energy == unmod_aa_reciprocal_energy == 0.0 * energy_unit
+        assert na_reciprocal_energy == unmod_na_reciprocal_energy == 0.0 * energy_unit
+
+        # Check direct space energy
+        assert_almost_equal(aa_particle_electro, aa_custom_particle_electro,
+                            'Alchemical/alchemical atoms particle electrostatics')
+        assert_almost_equal(na_particle_electro, na_custom_particle_electro,
+                            'Non-alchemical/alchemical atoms particle electrostatics')
+    assert_almost_equal(aa_exception_electro, aa_custom_exception_electro,
+                        'Alchemical/alchemical atoms exceptions electrostatics')
     assert_almost_equal(na_exception_electro, na_custom_exception_electro,
                         'Non-alchemical/alchemical atoms exceptions electrostatics')
 
@@ -1289,6 +1401,7 @@ def test_overlap():
         f.description = "Testing reference/alchemical overlap for %s..." % name
         yield f
 
+# TODO REMOVE slow attribute when openmm#1588 gets fixed
 @attr('slow')
 def test_alchemical_accuracy():
     """
