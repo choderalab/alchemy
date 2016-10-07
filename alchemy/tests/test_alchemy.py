@@ -540,7 +540,7 @@ def compute_direct_space_correction(nonbonded_force, alchemical_atoms, positions
 
     # If there is no reciprocal space, the correction is 0.0
     if nonbonded_force.getNonbondedMethod() not in [openmm.NonbondedForce.Ewald, openmm.NonbondedForce.PME]:
-        return nn_correction * energy_unit, aa_correction * energy_unit, na_correction * energy_unit
+        return aa_correction * energy_unit, na_correction * energy_unit
 
     # Get alpha ewald parameter
     alpha_ewald, _, _, _ = nonbonded_force.getPMEParameters()
