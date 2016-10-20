@@ -1108,6 +1108,11 @@ overlap_testsystem_names = [
     'toluene in implicit solvent',
 ]
 
+overlap_testsystem_names = [
+    'HostGuest in explicit solvent with PME',
+    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
+]
+
 test_systems = dict()
 
 # Generate host-guest test systems combinatorially.
@@ -1206,6 +1211,10 @@ test_systems['TIP3P with PME, no switch, no dispersion correction'] = {
 test_systems['TIP3P with PME, no switch, no dispersion correction, no alchemical atoms'] = {
     'test' : testsystems.WaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.PME),
     'factory_args' : {'ligand_atoms' : [], 'receptor_atoms' : [] }}
+
+test_systems['HostGuest in explicit solvent with PME'] = {
+    'test' : testsystems.HostGuestExplicit(nonbondedCutoff=9.0*unit.angstroms, use_dispersion_correction=True, nonbondedMethod=app.PME, switch_width=1.5*unit.angstroms, ewaldErrorTolerance=1.0e-6),
+    'factory_args' : {'ligand_atoms' : range(126,156), 'receptor_atoms' : range(0,126) }}
 
 test_systems['toluene in implicit solvent'] = {
     'test' : testsystems.TolueneImplicit(),
