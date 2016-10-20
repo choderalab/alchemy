@@ -56,12 +56,12 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     from alchemy import AbsoluteAlchemicalFactory, AlchemicalState
 
     # Create a factory to produce alchemical intermediates.
-    logger.info("Creating alchemical factory...")
+    print("Creating alchemical factory...")
     initial_time = time.time()
     factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
     final_time = time.time()
     elapsed_time = final_time - initial_time
-    logger.info("AbsoluteAlchemicalFactory initialization took %.3f s" % elapsed_time)
+    print("AbsoluteAlchemicalFactory initialization took %.3f s" % elapsed_time)
 
     # Create an alchemically-perturbed state corresponding to nearly fully-interacting.
     # NOTE: We use a lambda slightly smaller than 1.0 because the AlchemicalFactory does not use Custom*Force softcore versions if lambda = 1.0 identically.
@@ -73,13 +73,13 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
         platform = openmm.Platform.getPlatformByName(platform_name)
 
     # Create the perturbed system.
-    logger.info("Creating alchemically-modified state...")
+    print("Creating alchemically-modified state...")
     initial_time = time.time()
     alchemical_system = factory.createPerturbedSystem(alchemical_state)
     final_time = time.time()
     elapsed_time = final_time - initial_time
     # Compare energies.
-    logger.info("Computing reference energies...")
+    print("Computing reference energies...")
     reference_integrator = openmm.VerletIntegrator(timestep)
     if platform:
         reference_context = openmm.Context(reference_system, reference_integrator, platform)
@@ -88,7 +88,7 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     reference_context.setPositions(positions)
     reference_state = reference_context.getState(getEnergy=True)
     reference_potential = reference_state.getPotentialEnergy()
-    logger.info("Computing alchemical energies...")
+    print("Computing alchemical energies...")
     alchemical_integrator = openmm.VerletIntegrator(timestep)
     if platform:
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator, platform)
@@ -104,14 +104,14 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     alchemical_integrator.step(2)
 
     # Time simulations.
-    logger.info("Simulating reference system...")
+    print("Simulating reference system...")
     initial_time = time.time()
     reference_integrator.step(nsteps)
     reference_state = reference_context.getState(getEnergy=True)
     reference_potential = reference_state.getPotentialEnergy()
     final_time = time.time()
     reference_time = final_time - initial_time
-    logger.info("Simulating alchemical system...")
+    print("Simulating alchemical system...")
     initial_time = time.time()
     alchemical_integrator.step(nsteps)
     alchemical_state = alchemical_context.getState(getEnergy=True)
@@ -119,10 +119,12 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     final_time = time.time()
     alchemical_time = final_time - initial_time
 
-    logger.info("TIMINGS")
-    logger.info("reference system       : %12.3f s for %8d steps (%12.3f ms/step)" % (reference_time, nsteps, reference_time/nsteps*1000))
-    logger.info("alchemical system      : %12.3f s for %8d steps (%12.3f ms/step)" % (alchemical_time, nsteps, alchemical_time/nsteps*1000))
-    logger.info("alchemical simulation is %12.3f x slower than unperturbed system" % (alchemical_time / reference_time))
+    seconds_per_day = (1.*unit.day)/(1.*unit.seconds)
+
+    print("TIMINGS")
+    print("reference system       : %12.3f s for %8d steps (%12.3f ms/step; %12.3f ns/day)" % (reference_time, nsteps, reference_time/nsteps*1000, nsteps*timestep*(seconds_per_day/reference_time)/unit.nanoseconds))
+    print("alchemical system      : %12.3f s for %8d steps (%12.3f ms/step; %12.3f ns/day)" % (alchemical_time, nsteps, alchemical_time/nsteps*1000, nsteps*timestep*(seconds_per_day/alchemical_time)/unit.nanoseconds))
+    print("alchemical simulation is %12.3f x slower than unperturbed system" % (alchemical_time / reference_time))
 
     return delta
 
