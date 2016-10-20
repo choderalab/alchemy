@@ -72,6 +72,9 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     if platform_name:
         platform = openmm.Platform.getPlatformByName(platform_name)
 
+    temperature = 300.*unit.kelvin
+    collision_rate = 90./unit.picoseconds
+
     # Create the perturbed system.
     print("Creating alchemically-modified state...")
     initial_time = time.time()
@@ -80,7 +83,7 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     elapsed_time = final_time - initial_time
     # Compare energies.
     print("Computing reference energies...")
-    reference_integrator = openmm.VerletIntegrator(timestep)
+    reference_integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     if platform:
         reference_context = openmm.Context(reference_system, reference_integrator, platform)
     else:
@@ -88,8 +91,9 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     reference_context.setPositions(positions)
     reference_state = reference_context.getState(getEnergy=True)
     reference_potential = reference_state.getPotentialEnergy()
+    print(reference_potential)
     print("Computing alchemical energies...")
-    alchemical_integrator = openmm.VerletIntegrator(timestep)
+    alchemical_integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     if platform:
         alchemical_context = openmm.Context(alchemical_system, alchemical_integrator, platform)
     else:
@@ -97,7 +101,7 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     alchemical_context.setPositions(positions)
     alchemical_state = alchemical_context.getState(getEnergy=True)
     alchemical_potential = alchemical_state.getPotentialEnergy()
-    delta = alchemical_potential - reference_potential
+    print(reference_potential)
 
     # Make sure all kernels are compiled.
     reference_integrator.step(2)
@@ -107,15 +111,17 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     print("Simulating reference system...")
     initial_time = time.time()
     reference_integrator.step(nsteps)
-    reference_state = reference_context.getState(getEnergy=True)
-    reference_potential = reference_state.getPotentialEnergy()
+    reference_state = reference_context.getState()
+    #reference_state = reference_context.getState(getEnergy=True)
+    #reference_potential = reference_state.getPotentialEnergy()
     final_time = time.time()
     reference_time = final_time - initial_time
     print("Simulating alchemical system...")
     initial_time = time.time()
     alchemical_integrator.step(nsteps)
-    alchemical_state = alchemical_context.getState(getEnergy=True)
-    alchemical_potential = alchemical_state.getPotentialEnergy()
+    reference_state = alchemical_context.getState()
+    #alchemical_state = alchemical_context.getState(getEnergy=True)
+    #alchemical_potential = alchemical_state.getPotentialEnergy()
     final_time = time.time()
     alchemical_time = final_time - initial_time
 
@@ -125,8 +131,6 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
     print("reference system       : %12.3f s for %8d steps (%12.3f ms/step; %12.3f ns/day)" % (reference_time, nsteps, reference_time/nsteps*1000, nsteps*timestep*(seconds_per_day/reference_time)/unit.nanoseconds))
     print("alchemical system      : %12.3f s for %8d steps (%12.3f ms/step; %12.3f ns/day)" % (alchemical_time, nsteps, alchemical_time/nsteps*1000, nsteps*timestep*(seconds_per_day/alchemical_time)/unit.nanoseconds))
     print("alchemical simulation is %12.3f x slower than unperturbed system" % (alchemical_time / reference_time))
-
-    return delta
 
 def run_benchmark():
     """
@@ -142,4 +146,4 @@ def run_benchmark():
         cls = getattr(testsystems, testsystem_name)
         testsystem = cls()
         factory_args = { 'ligand_atoms' : testsystem.alchemical_atoms, 'receptor_atoms' : range(0,4266) }
-        benchmark(testsystem.system, testsystem.positions, platform_name=options.platform_name, nsteps=5000, timestep=2.0*unit.femtoseconds, factory_args=factory_args)
+        benchmark(testsystem.system, testsystem.positions, platform_name=options.platform_name, nsteps=5000, timestep=1.0*unit.femtoseconds, factory_args=factory_args)
