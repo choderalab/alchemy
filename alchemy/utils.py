@@ -53,6 +53,7 @@ def benchmark(reference_system, positions, platform_name=None, nsteps=500, times
        Arguments passed to AbsoluteAlchemicalFactory.
 
     """
+    from alchemy import AbsoluteAlchemicalFactory, AlchemicalState
 
     # Create a factory to produce alchemical intermediates.
     logger.info("Creating alchemical factory...")
