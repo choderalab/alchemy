@@ -1209,6 +1209,7 @@ def generate_trace(test_system):
 
 accuracy_testsystem_names = [
     'Lennard-Jones cluster',
+    'Lennard-Jones cluster numpy atom set',
     'Lennard-Jones fluid without dispersion correction',
     'Lennard-Jones fluid with dispersion correction',
     'TIP3P with reaction field, no charges, no switch, no dispersion correction',
