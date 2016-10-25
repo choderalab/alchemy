@@ -1209,6 +1209,7 @@ def generate_trace(test_system):
 
 accuracy_testsystem_names = [
     'Lennard-Jones cluster',
+    'Lennard-Jones cluster numpy atom set',
     'Lennard-Jones fluid without dispersion correction',
     'Lennard-Jones fluid with dispersion correction',
     'TIP3P with reaction field, no charges, no switch, no dispersion correction',
@@ -1251,6 +1252,9 @@ for nonbonded_method in [openmm.app.CutoffPeriodic, openmm.app.PME]:
 test_systems['Lennard-Jones cluster'] = {
     'test' : testsystems.LennardJonesCluster(),
     'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2) }}
+test_systems['Lennard-Jones cluster numpy atom set'] = {
+    'test' : testsystems.LennardJonesCluster(),
+    'factory_args' : {'ligand_atoms' : np.array(range(0,1), np.int64), 'receptor_atoms' : np.array(range(1,2), np.int32) }}
 test_systems['Lennard-Jones cluster with modified softcore parameters'] = {
     'test' : testsystems.LennardJonesCluster(),
     'factory_args' : {'ligand_atoms' : range(0,1), 'receptor_atoms' : range(1,2), 'softcore_alpha' : 1, 'softcore_beta' : 1, 'softcore_a' : 2, 'softcore_b' : 2, 'softcore_c' : 2, 'softcore_d' : 2, 'softcore_e' : 2, 'softcore_f' : 2 }}
