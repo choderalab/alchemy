@@ -20,7 +20,6 @@ requirements:
     - python
     - numpy
     - openmm
-    - openmmtools
 
 test:
   requires:
