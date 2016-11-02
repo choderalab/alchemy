@@ -78,6 +78,11 @@ setup(name='alchemy',
       #package_data={'alchemy' : find_package_data('alchemy','examples')},
       zip_safe=False,
       ext_modules=extensions,
+      entry_points = {
+        'console_scripts' : [
+            'alchemy-benchmark = alchemy.utils:run_benchmark'
+        ]
+      },
       install_requires=[
         'openmm',
         'numpy',

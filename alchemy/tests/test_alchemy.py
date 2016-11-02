@@ -1232,6 +1232,11 @@ overlap_testsystem_names = [
     'toluene in implicit solvent',
 ]
 
+overlap_testsystem_names = [
+    'HostGuest in explicit solvent with PME',
+    'TIP3P with PME, no switch, no dispersion correction', # PME still lacks reciprocal space component; known energy comparison failure
+]
+
 test_systems = dict()
 
 # Generate host-guest test systems combinatorially.
