@@ -20,6 +20,7 @@ requirements:
     - python
     - numpy
     - openmm
+    - openmmtools
 
 test:
   requires:
@@ -28,7 +29,6 @@ test:
     - click
     - netcdf4
     - pymbar
-    - openmmtools
 
   imports:
     - alchemy
