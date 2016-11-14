@@ -1250,7 +1250,7 @@ for nonbonded_method in [openmm.app.CutoffPeriodic, openmm.app.PME]:
             test_systems[name] = {
                 'test': testsystems.HostGuestExplicit(nonbondedMethod=nonbonded_method),
                 'factory_args': {'ligand_atoms': range(126, 156), 'receptor_atoms': range(0, 126),
-                                 'softcore_beta': 0.0, 'annihilate_sterics': annihilate_sterics,
+                                 'annihilate_sterics': annihilate_sterics,
                                  'annihilate_electrostatics': annihilate_electrostatics}}
             accuracy_testsystem_names.append(name)
 
