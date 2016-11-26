@@ -38,6 +38,17 @@ systems = factory.createPerturbedSystems(protocol)
 
 ## Changelog
 
+### 1.2.3 - Bugfix release to update defaults
+* `softcore_beta` now defaults to 0.0 because we have not yet found a good alchemcial path with `softcore_beta > 0`
+* `lambda_restraints` now defaults to 1.0 to avoid the need to explicitly specify restraints in implicit solvent free energy calculations
+
+### 1.2.2 - Minor bugfix release
+* `alpha_ewald` is now properly computed if error tolerance is zero
+* better PME tests
+* atom lists containing `numpy.int64` integers are now properly handled
+* adds barostat to overlap tests
+* adds benchmarking script
+
 ### 1.2.1 - Critical bugfix release and overhaul of exceptions and testing
 This version overhauls the way exceptions are handled, fixing a variety of issues present in earlier versions.
 More thorough testing of fully-interacting and non-interacting systems is implemented, though not all tests run on travis.
