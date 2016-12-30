@@ -1,5 +1,4 @@
 [![Build Status](https://travis-ci.org/choderalab/alchemy.svg?branch=master)](https://travis-ci.org/choderalab/alchemy)
-[![Build Status](https://jenkins.choderalab.org/buildStatus/icon?job=test-alchemy-linux)](https://jenkins.choderalab.org/job/test-alchemy-linux/)
 [![Anaconda Badge](https://anaconda.org/omnia/alchemy/badges/version.svg)](https://anaconda.org/omnia/alchemy)
 [![DOI](https://zenodo.org/badge/42878787.svg)](https://zenodo.org/badge/latestdoi/42878787)
 
