@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/choderalab/alchemy.svg?branch=master)](https://travis-ci.org/choderalab/alchemy)
-[![Build Status](https://jenkins.choderalab.org/buildStatus/icon?job=test-alchemy-linux)](https://jenkins.choderalab.org/job/test-alchemy-linux/)
 [![Anaconda Badge](https://anaconda.org/omnia/alchemy/badges/version.svg)](https://anaconda.org/omnia/alchemy)
+[![Anaconda-Server Badge](https://anaconda.org/omnia/alchemy/badges/downloads.svg)](https://anaconda.org/omnia/alchemy)
 [![DOI](https://zenodo.org/badge/42878787.svg)](https://zenodo.org/badge/latestdoi/42878787)
 
 # Alchemical tools for OpenMM
@@ -9,14 +9,14 @@ This package contains [factories](https://en.wikipedia.org/wiki/Factory_(object-
 
 ## Installation
 
-The easiest way to install is through the [conda](http://conda.pydata.org/) package manager through the [omnia](http://omnia.md) [binstar repository](https://binstar.org/omnia/alchemy):
+The easiest way to install is through the [conda](http://conda.pydata.org/) package manager through the [omnia](http://omnia.md) [anaconda cloud repository](https://anaconda.org/omnia/alchemy):
 ```bash
 conda install -c omnia alchemy
 ```
 
 ## Examples
 
-Create alchemical intermediates for p-xylene binding to T4 lysozyme L99A in implicit solvent.
+Create alchemical intermediates for an absolute binding free energy calculation for p-xylene binding to T4 lysozyme L99A in implicit solvent:
 
 ```python
 # Create a reference system for T4 lysozyme L99A
@@ -35,6 +35,25 @@ protocol = factory.defaultComplexProtocolImplicit()
 # Create the perturbed systems using this protocol.
 systems = factory.createPerturbedSystems(protocol)
 ```
+
+## Features
+
+### Absolute alchemical factory (`AbsoluteAlchemicalFactory`)
+
+Features:
+
+* Absolute alchemical intermediates for a single specified region (can be a separate molecule, or part of a larger molecule)
+* Support for vacuum, explicit solvent (currently `PME` and `Ewald`), and implicit solvent (currently only `GBSAOBCForce`)
+* Exposure of alchemical parameters for softcore Lennard-Jones (`alpha, a, b, c`) and softcore electrostatics (`beta, d, e, f`).
+* Separate alchemical parameter for Lennard-Jones (`lambda_sterics`), electrostatics (`lambda_electrostatics`), torsions (`lambda_torsions`), angles (`lambda_angles`), and bonds (`lambda_bonds`)
+
+Known issues:
+
+* PME and Ewald support do not currently include the reciprocal-space contributions from the alchemically-modified region
+* Reaction field (`CutoffPeriodic`) currently subtracts a `lambda_electrostatics`-dependent value to ensure the energy is identically zero at the cutoff, which causes problems with alchemical free energy calculations utilizing reaction-field electrostatics
+* Alternative electrostatics models based on `CustomNonbondedForce` are not yet supported
+* Support for alchemically-modified implicit solvent models based on `CustomGBForce` has not yet been added
+* Poor efficiency for softcore electrostatics has been noted
 
 ## Changelog
 
