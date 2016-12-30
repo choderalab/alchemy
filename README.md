@@ -1,5 +1,6 @@
 [![Build Status](https://travis-ci.org/choderalab/alchemy.svg?branch=master)](https://travis-ci.org/choderalab/alchemy)
 [![Anaconda Badge](https://anaconda.org/omnia/alchemy/badges/version.svg)](https://anaconda.org/omnia/alchemy)
+[![Anaconda-Server Badge](https://anaconda.org/omnia/alchemy/badges/downloads.svg)](https://anaconda.org/omnia/alchemy)
 [![DOI](https://zenodo.org/badge/42878787.svg)](https://zenodo.org/badge/latestdoi/42878787)
 
 # Alchemical tools for OpenMM
