@@ -1503,7 +1503,7 @@ class AbsoluteAlchemicalFactory(object):
             # Retrieve parameters.
             parameters = reference_force.getParticleParameters(particle_index)
             # Append alchemical parameter
-            parameter = list(parameters)
+            parameters = list(parameters)
             if particle_index in self.ligand_atoms:
                 parameters.append(1.0)
             else:
