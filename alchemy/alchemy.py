@@ -1488,7 +1488,7 @@ class AbsoluteAlchemicalFactory(object):
 
             # Alter expressions
             if (computation_type == openmm.CustomGBForce.SingleParticle):
-                prepend = 'alchemical_scaling*unscaled; alchemical_scaling = (lambda_electrostatics*alchemical2 + (1-alchemical2)); unscaled = '
+                prepend = 'alchemical_scaling*unscaled; alchemical_scaling = (lambda_electrostatics*alchemical + (1-alchemical)); unscaled = '
                 expression = prepend + expression
             else:
                 expression.replace('charge1', 'alchemically_scaled_charge1')
