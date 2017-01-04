@@ -759,13 +759,39 @@ def check_noninteracting_energy_components(factory, positions, platform=None):
         assert_zero_energy('alchemically modified BondForce for alchemical/alchemical electrostatics exceptions')
 
     # Check valence terms
-    for force_name in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce', 'GBSAOBCForce']:
+    for force_name in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce', 'GBSAOBCForce', 'CustomGBForce']:
         force_label = 'alchemically modified ' + force_name
         if force_label in energy_components:
             assert_zero_energy(force_label)
 
+def get_context_parameters(system, prefix='lambda'):
+        """
+        Return a list of available alchemical context parameters defined in the system
 
-def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
+        Parameters
+        ----------
+        system : simtk.openmm.System
+            The system for which available context parameters are to be determined
+        prefix : str, optional, default='lambda'
+            Prefix required for parameters to be returned.
+
+        Returns
+        -------
+        parameters : list of str
+            The list of available context parameters in the system
+
+        """
+        parameters = list()
+        for force_index in range(system.getNumForces()):
+            force = system.getForce(force_index)
+            if hasattr(force, 'getNumGlobalParameters'):
+                for parameter_index in range(force.getNumGlobalParameters()):
+                    parameter_name = force.getGlobalParameterName(parameter_index)
+                    if parameter_name[0:(len(prefix)+1)] == (prefix + '_'):
+                        parameters.append(parameter_name)
+        return parameters
+
+def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None, alchemical_lambda=1.0):
     # Compare energies.
     timestep = 1.0 * unit.femtosecond
 
@@ -778,7 +804,6 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
                 platform.setDefaultPropertyValue('OpenCLPrecision', precision)
 
     potentials = list()
-    states = list()
     for system in systems:
         #dump_xml(system=system)
         integrator = openmm.VerletIntegrator(timestep)
@@ -788,12 +813,18 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
         else:
             context = openmm.Context(system, integrator)
         context.setPositions(positions)
-        state = context.getState(getEnergy=True, getPositions=True)
+
+        # Set alchemical parameters
+        alchemical_parameters = get_context_parameters(system)
+        for parameter in alchemical_parameters:
+            context.setParameter(parameter, alchemical_lambda)
+
+        # Get potential energy
+        state = context.getState(getEnergy=True)
         #dump_xml(system=system, integrator=integrator, state=state)
         potential = state.getPotentialEnergy()
         potentials.append(potential)
-        states.append(state)
-        del context, integrator, state
+        del context, integrator
 
     logger.info("========")
     for i in range(len(systems)):
@@ -1400,6 +1431,32 @@ def test_softcore_parameters():
     factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
     alchemical_system = factory.createPerturbedSystem()
     compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'])
+
+def test_gbsa_models():
+    """
+    Test that alchemical modification of GBSA parameters correctly recovers fully-interacting and noninteracting parameters.
+
+    TODO: Is this test redundant?
+
+    """
+    # GB models supported by OpenMM
+    gbmodels = [app.HCT, app.OBC1, app.OBC2, app.GBn, app.GBn2]
+
+    for gbmodel in gbmodels:
+        # Define test system
+        testsystem = testsystems.HostGuestImplicit(implicitSolvent=gbmodel)
+        reference_system = testsystem.system
+
+        # Create alchemically-modified system
+        factory_args = {'ligand_atoms' : range(126,156), 'receptor_atoms' : range(0,126),
+            'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
+        factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
+        alchemical_system = factory.createPerturbedSystem()
+
+        # Check fully interacting energies are correctly reproduced.
+        compareSystemEnergies(testsystem.positions, [reference_system, alchemical_system], ['reference', 'alchemical'])
+
+        # TODO: Do we need to check if noninteracting energies are correctly reproduced?
 
 #=============================================================================================
 # NOSETEST GENERATORS

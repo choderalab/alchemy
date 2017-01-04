@@ -1498,9 +1498,8 @@ class AbsoluteAlchemicalFactory(object):
 
             custom_force.addEnergyTerm(expression, computation_type)
 
-        # Add particle parameters.
+        # Add particle parameters
         for particle_index in range(reference_force.getNumParticles()):
-            # Retrieve parameters.
             parameters = reference_force.getParticleParameters(particle_index)
             # Append alchemical parameter
             parameters = list(parameters)
@@ -1510,7 +1509,14 @@ class AbsoluteAlchemicalFactory(object):
                 parameters.append(0.0)
             custom_force.addParticle(parameters)
 
-        # Add alchemically-modified CustomGBForce to system.
+        # Add tabulated functions
+        for function_index in range(reference_force.getNumTabulatedFunctions()):
+            name = reference_force.getTabulatedFunctionName(function_index)
+            function = reference_force.getTabulatedFunction(function_index)
+            function_copy = copy.deepcopy(function)
+            custom_force.addTabulatedFunction(name, function_copy)
+
+        # Add alchemically-modified CustomGBForce to system
         force_index = system.addForce(custom_force)
         force_labels['alchemically modified CustomGBForce'] = force_index
 
