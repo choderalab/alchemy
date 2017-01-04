@@ -1513,7 +1513,7 @@ class AbsoluteAlchemicalFactory(object):
         for function_index in range(reference_force.getNumTabulatedFunctions()):
             name = reference_force.getTabulatedFunctionName(function_index)
             function = reference_force.getTabulatedFunction(function_index)
-            function_copy = copy.deepcopy(function)
+            function_copy = function.Copy()
             custom_force.addTabulatedFunction(name, function_copy)
 
         # Add alchemically-modified CustomGBForce to system
