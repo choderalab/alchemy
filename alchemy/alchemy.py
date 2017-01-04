@@ -1516,6 +1516,11 @@ class AbsoluteAlchemicalFactory(object):
             function_copy = function.Copy()
             custom_force.addTabulatedFunction(name, function_copy)
 
+        # Add exclusions
+        for exclusion_index in range(reference_force.getNumExclusions()):
+            [particle1, particle2] = reference_force.getExclusionParticles(exclusion_index)
+            custom_force.addExclusion(particle1, particle2)
+
         # Add alchemically-modified CustomGBForce to system
         force_index = system.addForce(custom_force)
         force_labels['alchemically modified CustomGBForce'] = force_index
