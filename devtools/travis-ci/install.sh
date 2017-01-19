@@ -12,4 +12,4 @@ bash $MINICONDA -b -p $HOME/miniconda
 
 # Configure miniconda
 export PATH=$HOME/miniconda/bin:$PATH
-conda install --yes conda-build==2.0.1 anaconda-client jinja2 pip
+conda install --yes conda-build anaconda-client jinja2 pip
