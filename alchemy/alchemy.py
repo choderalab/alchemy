@@ -311,7 +311,7 @@ class AbsoluteAlchemicalFactory(object):
         # If no ligand atom set is specified, create an empty list.
         if ligand_atoms is None:
             ligand_atoms = list()
-        
+
         # Ligand atoms must be list of numpy int type
         ligand_atoms = [ int(index) for index in ligand_atoms ]
 
@@ -1370,11 +1370,6 @@ class AbsoluteAlchemicalFactory(object):
         sasa_model : str, optional, default='ACE'
             Solvent accessible surface area model.
 
-        TODO
-        ----
-        * Add support for all types of GBSA forces supported by OpenMM.
-        * Can we more generally modify any CustomGBSAForce?
-
         """
 
         custom_force = openmm.CustomGBForce()
@@ -1427,6 +1422,109 @@ class AbsoluteAlchemicalFactory(object):
         force_index = system.addForce(custom_force)
         force_labels['alchemically modified GBSAOBCForce'] = force_index
 
+    def _alchemicallyModifyCustomGBForce(self, system, reference_force, force_labels):
+        """
+        Create alchemically-modified version of CustomGBForce by metaprogramming GB functions.
+
+        The following rules are applied:
+        - 'lambda_electrostatics' is added as a global parameter.
+        - 'alchemical' is added as a per-particle parameter.
+           All atoms in the alchemical group have this parameter set to 1; otherwise 0.
+        - Any single-particle energy term (`CustomGBForce.SingleParticle`) is scaled by `(lambda_electrostatics*alchemical+(1-alchemical))`
+        - Any two-particle energy term (`CustomGBForce.ParticlePairNoExclusions`) has charge 1 (`charge1`) replaced by `(lambda_electrostatics*alchemical1+(1-alchemical1))*charge1` and charge 2 (`charge2`) replaced by `(lambda_electrostatics*alchemical2+(1-alchemical2))*charge2`.
+        - Any single-particle computed value (`CustomGBForce.SingleParticle`) remains unmodified
+        - Any two-particle computed value (`CustomGBForce.ParticlePairNoExclusions`) is scaled by `(lambda_electrostatics*alchemical2 + (1-alchemical2))`
+
+        Scaling of a term should always prepend and capture the value with an intermediate variable.
+        For example, prepending `scaling * unscaled; unscaled =` will capture the value of the expression as `unscaled` and multiple by `scaled`.
+        This avoids the need to identify the head expression and add parentheses.
+
+        WARNING: This may not work correctly for all GB models.
+
+        Parameters
+        ----------
+        system : simtk.openmm.System
+            Alchemically-modified System object being built.  This object will be modified.
+        reference_force : simtk.openmm.GBSAOBCForce
+            Reference force to use for template.
+        force_labels : dict of int : str
+            force_labels[name] is the force index in the alchemically modified system of the modified force `name`
+
+        """
+
+        custom_force = openmm.CustomGBForce()
+
+        # Add global parameters
+        for index in range(reference_force.getNumGlobalParameters()):
+            name = reference_force.getGlobalParameterName(index)
+            default_value = reference_force.getGlobalParameterDefaultValue(index)
+            custom_force.addGlobalParameter(name, default_value)
+        custom_force.addGlobalParameter("lambda_electrostatics", 1.0);
+
+        # Add per-particle parameters.
+        for index in range(reference_force.getNumPerParticleParameters()):
+            name = reference_force.getPerParticleParameterName(index)
+            custom_force.addPerParticleParameter(name)
+        custom_force.addPerParticleParameter("alchemical");
+
+        # Set nonbonded methods.
+        custom_force.setNonbondedMethod(reference_force.getNonbondedMethod())
+        custom_force.setCutoffDistance(reference_force.getCutoffDistance())
+
+        # Add computations.
+        for index in range(reference_force.getNumComputedValues()):
+            [name, expression, computation_type] = reference_force.getComputedValueParameters(index)
+
+            # Alter expression for particle pair terms only.
+            if not (computation_type == openmm.CustomGBForce.SingleParticle):
+                prepend = 'alchemical_scaling*unscaled; alchemical_scaling = (lambda_electrostatics*alchemical2 + (1-alchemical2)); unscaled = '
+                expression = prepend + expression
+
+            custom_force.addComputedValue(name, expression, computation_type)
+
+        # Add energy terms.
+        for index in range(reference_force.getNumEnergyTerms()):
+            [expression, computation_type] = reference_force.getEnergyTermParameters(index)
+
+            # Alter expressions
+            if (computation_type == openmm.CustomGBForce.SingleParticle):
+                prepend = 'alchemical_scaling*unscaled; alchemical_scaling = (lambda_electrostatics*alchemical + (1-alchemical)); unscaled = '
+                expression = prepend + expression
+            else:
+                expression.replace('charge1', 'alchemically_scaled_charge1')
+                expression.replace('charge2', 'alchemically_scaled_charge2')
+                expression += ' ; alchemically_scaled_charge1 = (lambda_electrostatics*alchemical1+(1-alchemical1)) * charge1;'
+                expression += ' ; alchemically_scaled_charge2 = (lambda_electrostatics*alchemical2+(1-alchemical2)) * charge2;'
+
+            custom_force.addEnergyTerm(expression, computation_type)
+
+        # Add particle parameters
+        for particle_index in range(reference_force.getNumParticles()):
+            parameters = reference_force.getParticleParameters(particle_index)
+            # Append alchemical parameter
+            parameters = list(parameters)
+            if particle_index in self.ligand_atoms:
+                parameters.append(1.0)
+            else:
+                parameters.append(0.0)
+            custom_force.addParticle(parameters)
+
+        # Add tabulated functions
+        for function_index in range(reference_force.getNumTabulatedFunctions()):
+            name = reference_force.getTabulatedFunctionName(function_index)
+            function = reference_force.getTabulatedFunction(function_index)
+            function_copy = function.Copy()
+            custom_force.addTabulatedFunction(name, function_copy)
+
+        # Add exclusions
+        for exclusion_index in range(reference_force.getNumExclusions()):
+            [particle1, particle2] = reference_force.getExclusionParticles(exclusion_index)
+            custom_force.addExclusion(particle1, particle2)
+
+        # Add alchemically-modified CustomGBForce to system
+        force_index = system.addForce(custom_force)
+        force_labels['alchemically modified CustomGBForce'] = force_index
+
     def _createAlchemicallyModifiedSystem(self, mm=None):
         """
         Create an alchemically modified version of the reference system with global parameters encoding alchemical parameters.
@@ -1445,6 +1543,8 @@ class AbsoluteAlchemicalFactory(object):
           Use class names instead.
 
         """
+        # TODO: Check that the provided system hasn't already been alchemically modified.
+        # We don't want to allow a System to be modified twice!
 
         # Record timing statistics.
         initial_time = time.time()
@@ -1487,6 +1587,8 @@ class AbsoluteAlchemicalFactory(object):
                 self._alchemicallyModifyHarmonicBondForce(system, reference_force, force_labels)
             elif isinstance(reference_force, openmm.NonbondedForce):
                 self._alchemicallyModifyNonbondedForce(system, reference_force, force_labels)
+            elif isinstance(reference_force, openmm.CustomGBForce):
+                self._alchemicallyModifyCustomGBForce(system, reference_force, force_labels)
             elif isinstance(reference_force, openmm.GBSAOBCForce):
                 self._alchemicallyModifyGBSAOBCForce(system, reference_force, force_labels)
             elif isinstance(reference_force, openmm.AmoebaMultipoleForce):

@@ -759,13 +759,39 @@ def check_noninteracting_energy_components(factory, positions, platform=None):
         assert_zero_energy('alchemically modified BondForce for alchemical/alchemical electrostatics exceptions')
 
     # Check valence terms
-    for force_name in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce', 'GBSAOBCForce']:
+    for force_name in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce', 'GBSAOBCForce', 'CustomGBForce']:
         force_label = 'alchemically modified ' + force_name
         if force_label in energy_components:
             assert_zero_energy(force_label)
 
+def get_context_parameters(system, prefix='lambda'):
+        """
+        Return a list of available alchemical context parameters defined in the system
 
-def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None):
+        Parameters
+        ----------
+        system : simtk.openmm.System
+            The system for which available context parameters are to be determined
+        prefix : str, optional, default='lambda'
+            Prefix required for parameters to be returned.
+
+        Returns
+        -------
+        parameters : list of str
+            The list of available context parameters in the system
+
+        """
+        parameters = list()
+        for force_index in range(system.getNumForces()):
+            force = system.getForce(force_index)
+            if hasattr(force, 'getNumGlobalParameters'):
+                for parameter_index in range(force.getNumGlobalParameters()):
+                    parameter_name = force.getGlobalParameterName(parameter_index)
+                    if parameter_name[0:(len(prefix)+1)] == (prefix + '_'):
+                        parameters.append(parameter_name)
+        return parameters
+
+def compareSystemEnergies(positions, systems, descriptions, platform=None, precision=None, alchemical_lambda=1.0):
     # Compare energies.
     timestep = 1.0 * unit.femtosecond
 
@@ -778,7 +804,6 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
                 platform.setDefaultPropertyValue('OpenCLPrecision', precision)
 
     potentials = list()
-    states = list()
     for system in systems:
         #dump_xml(system=system)
         integrator = openmm.VerletIntegrator(timestep)
@@ -788,12 +813,18 @@ def compareSystemEnergies(positions, systems, descriptions, platform=None, preci
         else:
             context = openmm.Context(system, integrator)
         context.setPositions(positions)
-        state = context.getState(getEnergy=True, getPositions=True)
+
+        # Set alchemical parameters
+        alchemical_parameters = get_context_parameters(system)
+        for parameter in alchemical_parameters:
+            context.setParameter(parameter, alchemical_lambda)
+
+        # Get potential energy
+        state = context.getState(getEnergy=True)
         #dump_xml(system=system, integrator=integrator, state=state)
         potential = state.getPotentialEnergy()
         potentials.append(potential)
-        states.append(state)
-        del context, integrator, state
+        del context, integrator
 
     logger.info("========")
     for i in range(len(systems)):
@@ -1311,8 +1342,14 @@ test_systems['alanine dipeptide in OBC GBSA, with sterics annihilated'] = {
 test_systems['alanine dipeptide in TIP3P with reaction field'] = {
     'test' : testsystems.AlanineDipeptideExplicit(nonbondedMethod=app.CutoffPeriodic),
     'factory_args' : {'ligand_atoms' : range(0,22), 'receptor_atoms' : range(22,22) }}
-test_systems['T4 lysozyme L99A with p-xylene in OBC GBSA'] = {
-    'test' : testsystems.LysozymeImplicit(),
+test_systems['T4 lysozyme L99A with p-xylene in OBC1 GBSA'] = {
+    'test' : testsystems.LysozymeImplicit(implicitSolvent=app.OBC1),
+    'factory_args' : {'ligand_atoms' : range(2603,2621), 'receptor_atoms' : range(0,2603) }}
+test_systems['T4 lysozyme L99A with p-xylene in OBC2 GBSA'] = {
+    'test' : testsystems.LysozymeImplicit(implicitSolvent=app.OBC2),
+    'factory_args' : {'ligand_atoms' : range(2603,2621), 'receptor_atoms' : range(0,2603) }}
+test_systems['T4 lysozyme L99A with p-xylene in GBn2 GBSA'] = {
+    'test' : testsystems.LysozymeImplicit(implicitSolvent=app.GBn2),
     'factory_args' : {'ligand_atoms' : range(2603,2621), 'receptor_atoms' : range(0,2603) }}
 test_systems['DHFR in explicit solvent with reaction field, annihilated'] = {
     'test' : testsystems.DHFRExplicit(nonbondedMethod=app.CutoffPeriodic),
@@ -1331,7 +1368,6 @@ test_systems['Src in GBSA, with Src sterics annihilated'] = {
     'factory_args' : {'ligand_atoms' : range(0,4427), 'receptor_atoms' : [],
     'annihilate_sterics' : True, 'annihilate_electrostatics' : True }}
 
-# Problematic tests: PME is not fully implemented yet
 test_systems['TIP3P with PME, no switch, no dispersion correction'] = {
     'test' : testsystems.WaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.PME),
     'factory_args' : {'ligand_atoms' : range(0,3), 'receptor_atoms' : range(3,6) }}
@@ -1339,6 +1375,13 @@ test_systems['TIP3P with PME, no switch, no dispersion correction, no alchemical
     'test' : testsystems.WaterBox(dispersion_correction=False, switch=False, nonbondedMethod=app.PME),
     'factory_args' : {'ligand_atoms' : [], 'receptor_atoms' : [] }}
 
+
+test_systems['HostGuest in implicit solvent with OBC1'] = {
+    'test' : testsystems.HostGuestImplicit(implicitSolvent=app.OBC1),
+    'factory_args' : {'ligand_atoms' : range(126,156), 'receptor_atoms' : range(0,126) }}
+test_systems['HostGuest in implicit solvent with OBC2'] = {
+    'test' : testsystems.HostGuestImplicit(implicitSolvent=app.OBC2),
+    'factory_args' : {'ligand_atoms' : range(126,156), 'receptor_atoms' : range(0,126) }}
 test_systems['HostGuest in explicit solvent with PME'] = {
     'test' : testsystems.HostGuestExplicit(nonbondedCutoff=9.0*unit.angstroms, use_dispersion_correction=True, nonbondedMethod=app.PME, switch_width=1.5*unit.angstroms, ewaldErrorTolerance=1.0e-6),
     'factory_args' : {'ligand_atoms' : range(126,156), 'receptor_atoms' : range(0,126) }}
@@ -1388,6 +1431,32 @@ def test_softcore_parameters():
     factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
     alchemical_system = factory.createPerturbedSystem()
     compareSystemEnergies(positions, [reference_system, alchemical_system], ['reference', 'alchemical'])
+
+def test_gbsa_models():
+    """
+    Test that alchemical modification of GBSA parameters correctly recovers fully-interacting and noninteracting parameters.
+
+    TODO: Is this test redundant?
+
+    """
+    # GB models supported by OpenMM
+    gbmodels = [app.HCT, app.OBC1, app.OBC2, app.GBn, app.GBn2]
+
+    for gbmodel in gbmodels:
+        # Define test system
+        testsystem = testsystems.HostGuestImplicit(implicitSolvent=gbmodel)
+        reference_system = testsystem.system
+
+        # Create alchemically-modified system
+        factory_args = {'ligand_atoms' : range(126,156), 'receptor_atoms' : range(0,126),
+            'annihilate_sterics' : True, 'annihilate_electrostatics' : True }
+        factory = AbsoluteAlchemicalFactory(reference_system, **factory_args)
+        alchemical_system = factory.createPerturbedSystem()
+
+        # Check fully interacting energies are correctly reproduced.
+        compareSystemEnergies(testsystem.positions, [reference_system, alchemical_system], ['reference', 'alchemical'])
+
+        # TODO: Do we need to check if noninteracting energies are correctly reproduced?
 
 #=============================================================================================
 # NOSETEST GENERATORS

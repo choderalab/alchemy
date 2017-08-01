@@ -39,7 +39,7 @@ script:
   # Install the package
   - conda install --yes --use-local alchemy-dev
   # Install testing dependencies
-  - conda install --yes --quiet nose nose-timer click netcdf4 pymbar openmmtools
+  - conda install --yes --quiet nose nose-timer click netcdf4 pymbar openmmtools>=0.8.3
   # Test the package
   - cd devtools && nosetests $PACKAGENAME --nocapture --nologcapture --verbosity=2 --with-doctest --with-timer -a '!slow' && cd ..
 

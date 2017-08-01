@@ -29,6 +29,7 @@ test:
     - click
     - netcdf4
     - pymbar
+    - openmmtools
 
   imports:
     - alchemy
